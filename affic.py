@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageSequence
 import random
+import time
 from itertools import cycle
 
 # --- Palette de couleurs modernes ---
@@ -45,6 +46,11 @@ main_frame.grid_columnconfigure(0, weight=1)
 frames = {}
 
 # Variables globales
+last_detection_time = time.time()
+simulation_active = False
+result_display_time = 60  # 1 minutes en secondes
+error_detected = False
+
 dechet_type = tk.StringVar(value="En attente...")
 dechet_icons = {
     "Papier / Carton": "icons/papier.png",
@@ -61,13 +67,6 @@ dechets_interdits_icons = {
     "Déchets médicaux": "icons/medical.png",
     "Produits chimiques": "icons/chimique.png"
 }
-etats_systeme = cycle([
-    "Prêt",
-    "Détection en cours...",
-    "Tri en cours...",
-    "Déplacement du bras",
-    "Erreur: objet non reconnu"
-])
 
 # Compteur de déchets 
 class CompteurFrame(tk.Frame):
@@ -312,14 +311,17 @@ class EtatSystemeScreen(tk.Frame):
         self.state_label.pack()
 
     def update_state(self, msg):
+        global error_detected
+
         self.state_label.config(text=msg)
         if "erreur" in msg.lower():
+            error_detected = True
             self.state_icon.config(text="✗", fg=COLORS["error"])
             self.state_label.config(fg=COLORS["error"])
-        elif "prêt" in msg.lower():
-            self.state_icon.config(text="✓", fg=COLORS["success"])
-            self.state_label.config(fg=COLORS["success"])
+            # Retour immédiat à l'écran de veille en cas d'erreur
+            fenetre.after(3000, lambda: [show_frame(VeilleScreen), set_simulation_inactive()])
         else:
+            error_detected = False
             self.state_icon.config(text="🔄", fg=COLORS["warning"])
             self.state_label.config(fg=COLORS["primary"])
 
@@ -336,23 +338,76 @@ def create_frames():
 
 # Simulation
 def start_simulation_cycle():
+    global last_detection_time, simulation_active, error_detected
+
+    simulation_active = True
+    last_detection_time = time.time()
+    error_detected = False
+
     type_choisi = random.choice(list(dechet_icons.keys()))
+    poids = round(random.uniform(0.1, 0.3), 1)
+
+    # État aléatoire du système
+    etat_detection = random.choice([
+        "Détection en cours...",
+        "Analyse en cours...",
+        "Scan du déchet...",
+        "Vérification du matériau...",
+        "Erreur: objet trop lourd"
+    ])
+    
+    etat_tri = random.choice([
+        "Tri en cours...",
+        "Déplacement du bras",
+        "Classement du déchet",
+        "Orientation vers le bon bac",
+        "Erreur: bras coincé",
+        "Erreur: sac plein"
+    ])
+    
     
     show_frame(EtatSystemeScreen)
-    frames[EtatSystemeScreen].update_state("Détection en cours...")
-    fenetre.after(3000, lambda: frames[VeilleScreen].compteur.ajouter_dechet(0.5))
+    frames[EtatSystemeScreen].update_state(etat_detection)
+
+    # Ne pas ajouter au compteur si erreur dans le premier état
+    if "erreur" not in etat_detection.lower():
+        fenetre.after(6000, lambda: [show_frame(EtatSystemeScreen), 
+                                    frames[EtatSystemeScreen].update_state(etat_tri)])
+        
+        # Si pas d'erreur non plus dans le deuxième état, afficher le résultat
+        if "erreur" not in etat_tri.lower():
+            fenetre.after(3000, lambda: frames[VeilleScreen].compteur.ajouter_dechet(poids))
+            fenetre.after(9000, lambda: [show_frame(ResultatScreen), 
+                                        frames[ResultatScreen].update_type_dechet(type_choisi),
+                                        set_simulation_inactive()])
+            fenetre.after(9000 + (result_display_time * 1000), lambda: show_frame(VeilleScreen))
+        else:
+            # Si erreur, retour à l'écran de veille après 3 secondes (géré dans update_state)
+            pass
+    else:
+        # Si erreur, retour à l'écran de veille après 3 secondes (géré dans update_state)
+        pass
+
+def set_simulation_inactive():
+    global simulation_active
+    simulation_active = False
+
+def check_inactivity():
+    global last_detection_time
     
-    fenetre.after(6000, lambda: [show_frame(ResultatScreen), 
-                                frames[ResultatScreen].update_type_dechet(type_choisi)])
+    # Si aucune activité depuis 2 minutes (120000 ms)
+    if not simulation_active and (time.time() - last_detection_time) > result_display_time:
+        show_frame(VeilleScreen)
     
-    fenetre.after(9000, lambda: [show_frame(EtatSystemeScreen), 
-                                frames[EtatSystemeScreen].update_state("Tri en cours...")])
-    
-    fenetre.after(12000, lambda: show_frame(VeilleScreen))
+    # Vérifier toutes les minutes
+    fenetre.after(result_display_time * 1000, check_inactivity)
 
 # Initialisation
 create_frames()
 show_frame(VeilleScreen)
+
+# Démarrer la vérification d'inactivité
+fenetre.after(result_display_time * 1000, check_inactivity)
 
 # Démarrer la simulation (décommenter pour tester)
 fenetre.after(2000, start_simulation_cycle)
