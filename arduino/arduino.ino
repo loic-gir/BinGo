@@ -1,5 +1,6 @@
 // #include <Servo.h>
 // #include "HX711.h"
+#define NB_capteur 5
 
 // // Définition des pins de l’Arduino pour le capteur de poids
 // #define DT 2 // DT = Data (signal de données)
@@ -7,8 +8,8 @@
 // HX711 balance;
 
 // Définition des pins pour 5 capteurs ultrason (trig + echo)
-const int trigPins[5] = {9, 11, 13, A0, A2}; // Choisis des pins numériques dispo
-const int echoPins[5] = {8, 10, 12, A1, A3}; // Idem pour les echo
+const int trigPins[NB_capteur] = {2,3,4,5,6}; // Choisis des pins numériques dispo
+const int echoPins[NB_capteur] = {7,8,9,10,11}; // Idem pour les echo
 
 // // Création des objets Servo
 // Servo servo1; // FS5106B
@@ -36,10 +37,10 @@ void setup() {
   // balance.tare(); // Réinitialise la balance à zéro
 
   // // Attachement des servomoteurs aux pins correspondants
-  // servo1.attach(4);
-  // servo2.attach(5);
-  // servo3.attach(6);
-  // servo4.attach(7);
+  // servo1.attach(A1);
+  // servo2.attach(A2);
+  // servo3.attach(A3);
+  // servo4.attach(A4);
 }
 
 void loop() {
