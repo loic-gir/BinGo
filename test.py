@@ -543,16 +543,43 @@ class MainApplication(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def start_systems(self):
-    # CONNEXION ARDUINO AU DÉMARRAGE
+        # DIAGNOSTIC
+        self.test_arduino_debug()
+        # AJOUT MANQUANT : CONNEXION ARDUINO
+        print("🔍 Tentative de connexion Arduino...")
         if self.arduino_controller.connect():
+            print("✅ Arduino connecté avec succès")
             self.update_status("✅ Arduino connecté - Système complet")
         else:
+            print("❌ Arduino non trouvé")
             self.update_status("⚠️ Arduino non connecté - Mode détection seulement")
     
         # Votre code existant
         self.detection.start(self)
         self.update_status("Détection active")
         self.check_detections()
+
+    def test_arduino_debug(self):
+        """Test de diagnostic Arduino"""
+        print("\n=== DIAGNOSTIC ARDUINO ===")
+    
+        # Test 1: Ports disponibles
+        try:
+            ports = list(serial.tools.list_ports.comports())
+            print(f"Ports série disponibles ({len(ports)}):")
+            for port in ports:
+                print(f"  {port.device}: {port.description}")
+        except Exception as e:
+            print(f"Erreur listage ports: {e}")
+    
+        # Test 2: Ports standards
+        test_ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyUSB0', '/dev/ttyUSB1']
+        for port in test_ports:
+            exists = os.path.exists(port)
+            print(f"Port {port}: {'✓' if exists else '❌'}")
+    
+        print("=== FIN DIAGNOSTIC ===\n")
+
 
     def create_interface(self):
         main_container = tk.Frame(self, bg=Config.COLORS["background"], padx=15, pady=10)
@@ -969,84 +996,149 @@ class MainApplication(tk.Tk):
         self.arduino_controller.disconnect()
         self.detection.stop()
         self.destroy()
-    
+
 class ArduinoController:
-    def __init__(self, port='/dev/ttyACM0', baudrate=9600):
-        self.port = port
-        self.baudrate = baudrate
+    def __init__(self):
         self.arduino = None
         self.is_connected = False
+        self.port = None
         
     def connect(self):
-        """Établir la connexion avec l'Arduino"""
+        """Auto-détection et connexion Arduino avec debug détaillé"""
         try:
-            # Recherche automatique du port Arduino
-            import serial.tools.list_ports
-            arduino_ports = [port.device for port in serial.tools.list_ports.comports() 
-                           if 'Arduino' in port.description or 'ttyACM' in port.device or 'ttyUSB' in port.device]
+            print("🔍 Recherche automatique d'Arduino...")
             
-            if arduino_ports:
-                self.port = arduino_ports[0]
-                print(f"🔌 Port Arduino détecté: {self.port}")
+            # Lister TOUS les ports série disponibles
+            available_ports = list(serial.tools.list_ports.comports())
+            print(f"📋 Ports série détectés: {len(available_ports)}")
             
-            self.arduino = serial.Serial(self.port, self.baudrate, timeout=2)
-            time.sleep(3)  # Attendre l'initialisation Arduino
+            for port in available_ports:
+                print(f"   - {port.device}: {port.description}")
             
-            # Test de connexion
-            self.arduino.write(b'TEST\n')
-            response = self.arduino.readline().decode().strip()
-            
-            if response == "READY":
-                self.is_connected = True
-                print("✅ Arduino connecté et prêt")
-                return True
-            else:
-                print("❌ Arduino ne répond pas correctement")
-                return False
+            # Recherche spécifique Arduino
+            arduino_ports = []
+            for port in available_ports:
+                description = port.description.upper()
+                device = port.device
                 
+                # Critères de détection élargis
+                if any(keyword in description for keyword in 
+                      ['ARDUINO', 'CH340', 'FTDI', 'USB-SERIAL', 'ACM', 'USB']):
+                    arduino_ports.append(device)
+                    print(f"✓ Candidat Arduino trouvé: {device}")
+                
+                # Vérification par VID/PID
+                if hasattr(port, 'vid') and port.vid in [0x2341, 0x1A86, 0x0403]:
+                    if device not in arduino_ports:
+                        arduino_ports.append(device)
+                        print(f"✓ Arduino trouvé par VID: {device}")
+            
+            # Si aucun candidat automatique, tester les ports standards
+            if not arduino_ports:
+                print("⚠️ Aucun Arduino auto-détecté, test des ports standards...")
+                standard_ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyUSB0', '/dev/ttyUSB1']
+                for port in standard_ports:
+                    try:
+                        if os.path.exists(port):
+                            arduino_ports.append(port)
+                            print(f"✓ Port standard trouvé: {port}")
+                    except:
+                        pass
+            
+            # Tester chaque port candidat
+            for port_name in arduino_ports:
+                print(f"🔌 Test de connexion sur {port_name}...")
+                if self._test_arduino_connection(port_name):
+                    self.arduino = serial.Serial(port_name, 9600, timeout=2)
+                    self.port = port_name
+                    self.is_connected = True
+                    print(f"✅ Arduino connecté sur {port_name}")
+                    return True
+                else:
+                    print(f"❌ Échec connexion sur {port_name}")
+            
+            print("❌ Aucun Arduino compatible trouvé")
+            return False
+            
         except Exception as e:
-            print(f"❌ Erreur connexion Arduino: {e}")
-            self.is_connected = False
+            print(f"❌ Erreur détection Arduino: {e}")
+            return False
+    
+    def _test_arduino_connection(self, port_name):
+        """Test de connexion Arduino"""
+        try:
+            print(f"   Ouverture port {port_name}...")
+            test_serial = serial.Serial(port_name, 9600, timeout=5)
+            time.sleep(3)  # Attendre reset Arduino
+            
+            print(f"   Envoi commande TEST...")
+            test_serial.write(b'TEST\n')
+            time.sleep(1)
+            
+            # Lire réponse
+            if test_serial.in_waiting > 0:
+                response = test_serial.readline().decode().strip()
+                print(f"   Réponse reçue: '{response}'")
+                test_serial.close()
+                return response == "READY"
+            
+            print(f"   Aucune réponse reçue")
+            test_serial.close()
+            return False
+            
+        except Exception as e:
+            print(f"   Erreur test: {e}")
             return False
     
     def send_classification(self, object_type, confidence):
-        """Envoyer le résultat de classification à l'Arduino"""
+        """Envoi avec debug amélioré"""
         if not self.is_connected:
-            print("⚠️ Arduino non connecté")
+            print("⚠️ Arduino non connecté - impossible d'envoyer")
             return False
-            
+        
         try:
-            # Mapping des types d'objets vers des codes servo
-            servo_mapping = {
+            commands = {
                 "cardboard_paper": "PAPER",
-                "plastic": "PLASTIC", 
-                "metal": "METAL",
+                "plastic": "PLASTIC",
+                "metal": "METAL", 
                 "glass": "GLASS",
                 "trash": "TRASH"
             }
             
-            command = servo_mapping.get(object_type, "TRASH")
+            command = commands.get(object_type, "TRASH")
             message = f"{command},{confidence:.1f}\n"
             
             print(f"📤 Envoi à Arduino: {message.strip()}")
             self.arduino.write(message.encode())
             
-            # Attendre confirmation
-            response = self.arduino.readline().decode().strip()
-            print(f"📥 Réponse Arduino: {response}")
+            # Attendre réponse
+            start_time = time.time()
+            while time.time() - start_time < 3:
+                if self.arduino.in_waiting > 0:
+                    response = self.arduino.readline().decode().strip()
+                    print(f"📥 Réponse Arduino: '{response}'")
+                    
+                    if "DONE" in response:
+                        print("✅ Commande exécutée avec succès")
+                        return True
+                time.sleep(0.1)
             
-            return "DONE" in response
+            print("❌ Timeout - Aucune réponse de l'Arduino")
+            return False
             
         except Exception as e:
             print(f"❌ Erreur envoi Arduino: {e}")
             return False
     
     def disconnect(self):
-        """Fermer la connexion"""
+        """Fermer connexion proprement"""
         if self.arduino and self.is_connected:
-            self.arduino.close()
-            self.is_connected = False
-            print("🔌 Arduino déconnecté")
+            try:
+                self.arduino.close()
+                self.is_connected = False
+                print("🔌 Arduino déconnecté")
+            except:
+                pass
 
 def main():
     print("Démarrage de BinGo avec Arduino")
