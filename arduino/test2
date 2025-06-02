@@ -1,67 +1,137 @@
 #include <Servo.h>
 
-// Créer un objet servo
 Servo monServo;
+const int positionInitiale = 90;
 
-// Pin de connexion du servo
-const int servoPin = 9;
+// Mapping des commandes Python vers les angles
+struct CommandeAngle {
+  String commande;
+  int angle;
+  String nom;
+};
+
+CommandeAngle mappingCommandes[5] = {
+  {"PLASTIC", 0, "Plastique"},
+  {"PAPER", 45, "Papier/Carton"}, 
+  {"GLASS", 74, "Verre"},
+  {"TRASH", 135, "Non recyclable"},
+  {"METAL", 180, "Métal"}
+};
+
+String inputString = "";
+bool stringComplete = false;
 
 void setup() {
-  // Initialiser la communication série pour debug
   Serial.begin(9600);
-  
-  // Attacher le servo au pin 9
-  monServo.attach(servoPin);
-  
-  // Position initiale au centre
-  monServo.write(90);
-  
-  Serial.println("=== TEST SERVO MOTEUR ===");
-  Serial.println("Servo initialisé sur pin 9");
-  Serial.println("Position initiale: 90 degrés");
+  monServo.attach(9);  // Changé de A4 à pin 9 (plus standard)
+  monServo.write(positionInitiale);
   
   delay(1000);
+  Serial.println("READY");  // Signal que Python attend
+  Serial.println("Arduino Servo Controller initialisé");
 }
 
 void loop() {
-  // Test complet du servo moteur
-  testServoPositions();
-  
-  delay(2000); // Pause de 2 secondes avant de recommencer
+  // Traiter les commandes reçues de Python
+  if (stringComplete) {
+    processCommand(inputString);
+    inputString = "";
+    stringComplete = false;
+  }
 }
 
-void testServoPositions() {
-  Serial.println("\n--- Début du test ---");
+void serialEvent() {
+  while (Serial.available()) {
+    char inChar = (char)Serial.read();
+    if (inChar == '\n') {
+      stringComplete = true;
+    } else {
+      inputString += inChar;
+    }
+  }
+}
+
+void processCommand(String command) {
+  // Parse la commande "TYPE,CONFIDENCE"
+  int commaIndex = command.indexOf(',');
   
-  // Position 0° (extrême gauche)
-  Serial.println("Position: 0° (Papier)");
-  monServo.write(0);
-  delay(1500);
+  if (commaIndex > 0) {
+    String objectType = command.substring(0, commaIndex);
+    float confidence = command.substring(commaIndex + 1).toFloat();
+    
+    Serial.print("Reçu de Python: ");
+    Serial.print(objectType);
+    Serial.print(" avec confiance: ");
+    Serial.println(confidence);
+    
+    // Chercher la commande correspondante
+    bool commandeTrouvee = false;
+    
+    for (int i = 0; i < 5; i++) {
+      if (objectType == mappingCommandes[i].commande) {
+        commandeTrouvee = true;
+        Serial.print("Tri vers: ");
+        Serial.println(mappingCommandes[i].nom);
+        
+        // Déplacer le servo
+        moveToPosition(mappingCommandes[i].angle, mappingCommandes[i].nom);
+        break;
+      }
+    }
+    
+    if (commandeTrouvee) {
+      Serial.println("DONE");  // Confirmation que Python attend
+    } else {
+      Serial.println("ERREUR: Commande non reconnue");
+    }
+  } 
+  else if (command == "TEST") {
+    // Commande de test de Python
+    Serial.println("READY");
+  }
+  else {
+    Serial.println("ERREUR: Format de commande invalide");
+  }
+}
+
+void moveToPosition(int angleTarget, String nomCategorie) {
+  Serial.print("Mouvement vers ");
+  Serial.print(angleTarget);
+  Serial.print("° pour ");
+  Serial.println(nomCategorie);
   
-  // Position 45° 
-  Serial.println("Position: 45°");
-  monServo.write(45);
-  delay(1500);
+  // Mouvement progressif vers l'angle cible
+  int posActuelle = monServo.read();
   
-  // Position 90° (centre)
-  Serial.println("Position: 90° (Neutre)");
-  monServo.write(90);
-  delay(1500);
+  if (posActuelle < angleTarget) {
+    for (int angle = posActuelle; angle <= angleTarget; angle++) {
+      monServo.write(angle);
+      delay(15);  // Vitesse du mouvement
+    }
+  } else {
+    for (int angle = posActuelle; angle >= angleTarget; angle--) {
+      monServo.write(angle);
+      delay(15);
+    }
+  }
   
-  // Position 135°
-  Serial.println("Position: 135°");
-  monServo.write(135);
-  delay(1500);
+  delay(2000);  // Pause à la position cible (temps pour l'objet de tomber)
   
-  // Position 180° (extrême droite)
-  Serial.println("Position: 180° (Déchet)");
-  monServo.write(180);
-  delay(1500);
+  Serial.println("Retour position neutre...");
   
-  // Retour au centre
-  Serial.println("Retour au centre: 90°");
-  monServo.write(90);
-  delay(1000);
+  // Retour progressif à la position neutre
+  if (angleTarget < positionInitiale) {
+    for (int angle = angleTarget; angle <= positionInitiale; angle++) {
+      monServo.write(angle);
+      delay(15);
+    }
+  } else {
+    for (int angle = angleTarget; angle >= positionInitiale; angle--) {
+      monServo.write(angle);
+      delay(15);
+    }
+  }
   
-  Serial.println("--- Fin du test ---");
+  Serial.print("Tri terminé pour ");
+  Serial.println(nomCategorie);
 }
