@@ -17,6 +17,7 @@ from sklearn.preprocessing import LabelEncoder
 import warnings
 import serial
 import time
+import serial.tools.list_ports 
 
 
 # Suppress NumPy warnings about subnormal values
@@ -522,29 +523,35 @@ class MainApplication(tk.Tk):
         super().__init__()
         self.comm = comm_system
         self.detection = detection_system
+        
+        # INITIALISER L'ARDUINO EN PREMIER
+        self.arduino_controller = ArduinoController()
+        
+        # Votre code existant reste identique
         self.title("🗂️ BinGo - Poubelle Intelligente")
         self.geometry(f"{Config.WINDOW_WIDTH}x{Config.WINDOW_HEIGHT}")
         self.configure(bg=Config.COLORS["background"])
         self.resizable(False, False)
         self.attributes('-fullscreen', True)
+        
         self.current_result = None
         self.result_timer = None
         self.stats = {"total": 0, "papier": 0, "plastique": 0, "metal": 0, "verre": 0, "non_recyclable": 0}
+        
         self.create_interface()
         self.start_systems()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        # Ajouter le contrôleur Arduino
-        self.arduino_controller = ArduinoController()
 
     def start_systems(self):
-        """Démarrer tous les systèmes"""
-        # Connecter l'Arduino
+    # CONNEXION ARDUINO AU DÉMARRAGE
         if self.arduino_controller.connect():
-            self.update_status("Arduino connecté - Système complet")
+            self.update_status("✅ Arduino connecté - Système complet")
         else:
-            self.update_status("Arduino non connecté - Mode détection seulement")
-        # Démarrer les autres systèmes
+            self.update_status("⚠️ Arduino non connecté - Mode détection seulement")
+    
+        # Votre code existant
         self.detection.start(self)
+        self.update_status("Détection active")
         self.check_detections()
 
     def create_interface(self):
@@ -879,25 +886,32 @@ class MainApplication(tk.Tk):
             print(f"Erreur détections: {e}")
         self.after(100, self.check_detections)
 
+
     def handle_detection(self, label, confidence):
         print(f"DÉTECTION CONFIRMÉE après 3s: {label} ({confidence:.1f}%)")
-        # Envoyer à l'Arduino pour tri automatique
+    
+        # ENVOI À L'ARDUINO POUR TRI AUTOMATIQUE
         if self.arduino_controller.is_connected:
             success = self.arduino_controller.send_classification(label, confidence)
             if success:
-                self.update_status(f"✅ Objet trié automatiquement: {label}")
+                self.update_status(f"✅ Tri automatique réussi: {label}")
             else:
-                self.update_status(f"⚠️ Erreur tri automatique: {label}")
+                self.update_status(f"❌ Erreur tri automatique: {label}")
+        else:
+            self.update_status(f"⚠️ Détecté {label} mais Arduino non connecté")
+    
+        # Votre code existant continue identique
         self.update_stats(label)
         self.create_result_display(label, confidence)
         self.current_result = (label, confidence)
+    
         if self.result_timer:
             self.after_cancel(self.result_timer)
         self.result_timer = self.after(2000, self.return_to_waiting)
+    
         print("Objet classifié")
         self.update_status(f"CONFIRMÉ: {label} - Retour dans 2s")
         self.start_countdown_status(label)
-
 
     def start_countdown_status(self, label):
         def countdown(seconds_left):
