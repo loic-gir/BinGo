@@ -1,0 +1,67 @@
+#include <Servo.h>
+
+// Créer un objet servo
+Servo monServo;
+
+// Pin de connexion du servo
+const int servoPin = 9;
+
+void setup() {
+  // Initialiser la communication série pour debug
+  Serial.begin(9600);
+  
+  // Attacher le servo au pin 9
+  monServo.attach(servoPin);
+  
+  // Position initiale au centre
+  monServo.write(90);
+  
+  Serial.println("=== TEST SERVO MOTEUR ===");
+  Serial.println("Servo initialisé sur pin 9");
+  Serial.println("Position initiale: 90 degrés");
+  
+  delay(1000);
+}
+
+void loop() {
+  // Test complet du servo moteur
+  testServoPositions();
+  
+  delay(2000); // Pause de 2 secondes avant de recommencer
+}
+
+void testServoPositions() {
+  Serial.println("\n--- Début du test ---");
+  
+  // Position 0° (extrême gauche)
+  Serial.println("Position: 0° (Papier)");
+  monServo.write(0);
+  delay(1500);
+  
+  // Position 45° 
+  Serial.println("Position: 45°");
+  monServo.write(45);
+  delay(1500);
+  
+  // Position 90° (centre)
+  Serial.println("Position: 90° (Neutre)");
+  monServo.write(90);
+  delay(1500);
+  
+  // Position 135°
+  Serial.println("Position: 135°");
+  monServo.write(135);
+  delay(1500);
+  
+  // Position 180° (extrême droite)
+  Serial.println("Position: 180° (Déchet)");
+  monServo.write(180);
+  delay(1500);
+  
+  // Retour au centre
+  Serial.println("Retour au centre: 90°");
+  monServo.write(90);
+  delay(1000);
+  
+  Serial.println("--- Fin du test ---");
+}
