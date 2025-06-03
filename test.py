@@ -558,6 +558,8 @@ class MainApplication(tk.Tk):
         self.detection.start(self)
         self.update_status("Détection active")
         self.check_detections()
+        if self.arduinocontroller.isconnected:
+            self.arduinocontroller.set_led_color("green")  # Allumage poubelle
 
     def test_arduino_debug(self):
         """Test de diagnostic Arduino"""
@@ -782,7 +784,9 @@ class MainApplication(tk.Tk):
                  font=("Segoe UI", Config.FONT_SIZE_SMALL),
                  bg=Config.COLORS["card"], fg=Config.COLORS["text_muted"]).pack(pady=(5, 0))
     
-        self.animate_search_icon()
+        self.animate_search_icon()*
+        if self.arduinocontroller.isconnected:
+            self.arduinocontroller.set_led_color("white")
     
     def animate_search_icon(self):
         if hasattr(self, 'search_icon') and self.search_icon.winfo_exists():
@@ -848,6 +852,8 @@ class MainApplication(tk.Tk):
                  bg=Config.COLORS["card"], fg=Config.COLORS["success"]).pack(pady=(3, 0))
         tk.Label(result_container, text="Bras en mouvement...", font=("Segoe UI", Config.FONT_SIZE_SMALL),
                  bg=Config.COLORS["card"], fg=Config.COLORS["text_muted"]).pack(pady=(3, 0))
+        if self.arduinocontroller.isconnected:
+            self.arduinocontroller.set_led_color("red")
 
     def update_stats_display(self):
         for widget in self.stats_content.winfo_children():
@@ -882,12 +888,12 @@ class MainApplication(tk.Tk):
                      bg=Config.COLORS["card"], fg=Config.COLORS["text_primary"]).pack(side="left")
             tk.Label(info_frame, text=f"{count} ({percentage:.1f}%)", font=("Segoe UI", Config.FONT_SIZE_SMALL, "bold"),
                      bg=Config.COLORS["card"], fg=color).pack(side="right")
-            if self.stats["total"] > 0:
-                progress_bg = tk.Frame(cat_frame, bg=Config.COLORS["border"], height=3)
-                progress_bg.pack(fill="x", pady=(2, 0))
-                if count > 0:
-                    progress_fill = tk.Frame(progress_bg, bg=color, height=3)
-                    progress_fill.place(x=0, y=0, relwidth=percentage/100, height=3)
+            #if self.stats["total"] > 0:
+                #progress_bg = tk.Frame(cat_frame, bg=Config.COLORS["border"], height=3)
+                #progress_bg.pack(fill="x", pady=(2, 0))
+                #if count > 0:
+                    #progress_fill = tk.Frame(progress_bg, bg=color, height=3)
+                    #progress_fill.place(x=0, y=0, relwidth=percentage/100, height=3)
 
     def start_systems(self):
         self.detection.start(self)
@@ -952,6 +958,8 @@ class MainApplication(tk.Tk):
     def handle_no_object(self):
         self.return_to_waiting()
         self.update_status("🔍 En attente d'un objet")
+        if self.arduinocontroller.isconnected:
+            self.arduinocontroller.set_led_color("blue")
 
     def return_to_waiting(self):
         if self.result_timer:
@@ -962,6 +970,8 @@ class MainApplication(tk.Tk):
         self.comm.reset_stability_tracking()
         self.update_status("Système prêt - En attente d'un objet")
         print("Retour à l'écran d'attente")
+        if self.arduinocontroller.isconnected:
+            self.arduinocontroller.set_led_color("blue")
 
     def update_stats(self, label):
         self.stats["total"] += 1
@@ -1139,6 +1149,23 @@ class ArduinoController:
                 print("🔌 Arduino déconnecté")
             except:
                 pass
+    def set_led_color(self, color):
+        if not self.isconnected:
+            print("Arduino non connecté - impossible d'envoyer la couleur")
+            return
+        color_cmds = {
+            "white": "WHITE",
+            "red": "RED",
+            "green": "GREEN",
+            "blue": "BLUE"
+        }
+        cmd = color_cmds.get(color.lower())
+        if cmd:
+            try:
+                self.arduino.write((cmd + "\n").encode())
+                print(f"Commande LED envoyée: {cmd}")
+            except Exception as e:
+                print(f"Erreur envoi LED: {e}")
 
 def main():
     print("Démarrage de BinGo avec Arduino")
