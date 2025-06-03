@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BinGo - Suivi des Bacs</title>
+  <link rel="stylesheet" type="text/css" href="style.css" />
+  <script src="script.js"></script>
+</head>
+
+<body>
+  <header>
+    <button class="notif-btn" onclick="displayLog()">🔔</button>
+    <img src="../icons/logo.png" alt="Logo" />
+    <h1>BinGo</h1>
+  </header>
+
+  <div class="notif-log" id="notifLog">
+    <h2>Historique des notifications envoyées</h2>
+    <div id="notifContent">
+      <p>Chargement des notifications...</p>
+    </div>
+  </div>
+
+  <div class="shadow_css" id="shadow" onclick="hideLog()"></div>
+  <div class="container">
+    <div id="bins">
+      <div class="bin" id="bin-0">
+        <div class="bin-label" id="label-0">🗑️ Bac 1 : 0%</div>
+        <div class="progress">
+          <div class="progress-bar" id="bar-0" style="width:0%; background-color:#4caf50">0%</div>
+        </div>
+      </div>
+      <div class="bin" id="bin-1">
+        <div class="bin-label" id="label-1">🗑️ Bac 2 : 0%</div>
+        <div class="progress">
+          <div class="progress-bar" id="bar-1" style="width:0%; background-color:#4caf50">0%</div>
+        </div>
+      </div>
+      <div class="bin" id="bin-2">
+        <div class="bin-label" id="label-2">🗑️ Bac 3 : 0%</div>
+        <div class="progress">
+          <div class="progress-bar" id="bar-2" style="width:0%; background-color:#4caf50">0%</div>
+        </div>
+      </div>
+      <div class="bin" id="bin-3">
+        <div class="bin-label" id="label-3">🗑️ Bac 4 : 0%</div>
+        <div class="progress">
+          <div class="progress-bar" id="bar-3" style="width:0%; background-color:#4caf50">0%</div>
+        </div>
+      </div>
+      <div class="bin" id="bin-4">
+        <div class="bin-label" id="label-4">🗑️ Bac 5 : 0%</div>
+        <div class="progress">
+          <div class="progress-bar" id="bar-4" style="width:0%; background-color:#4caf50">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="last-update" id="lastUpdate">Dernière mise à jour : --</div>
+  </div>
+
+</body>
+
+</html>
