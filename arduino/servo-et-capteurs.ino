@@ -1,11 +1,46 @@
-#define NB_CAPTEURS 4
+#define NB_CAPTEURS 5
 #include <Servo.h>
 
-Servo monServo;  // Création de l'objet servo
+// Déclaration des servomoteurs
+Servo servos[4]; 
+const int servoPins[4] = {A0, A1, A2, A3}; 
+const int initialPositions[4] = {90, 45, 90, 0};
 
-// Définir les pins TRIG et ECHO
-int trigPins[NB_CAPTEURS] = {2, 3, 4, 5};
-int echoPins[NB_CAPTEURS] = {6, 7, 8, 9};
+// Configuration des mots-clés
+const String mots[5] = {"plastique", "carton", "verre", "non recyclable", "metal"};
+const int anglesServo1[5] = {0, 45, 74, 135, 180};
+
+// Configuration des capteurs à ultrasons
+const int trigPins[NB_CAPTEURS] = {2, 3, 4, 5, 6};
+const int echoPins[NB_CAPTEURS] = {7, 8, 9, 10, 11};
+
+// Variables d'état
+bool sequenceComplete = false;
+const int DISTANCE_PLEIN = 10; // Seuil en cm pour considérer le bac plein
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Initialisation des capteurs
+  for (int i = 0; i < NB_CAPTEURS; i++) {
+    pinMode(trigPins[i], OUTPUT);
+    pinMode(echoPins[i], INPUT);
+  }
+  
+  // Initialisation des servos
+  for(int i = 0; i < 4; i++) {
+    servos[i].attach(servoPins[i]);
+    servos[i].write(initialPositions[i]);
+    delay(500);
+  }
+
+  Serial.println("Système prêt. Envoyez un mot clé :");
+  Serial.println("- plastique");
+  Serial.println("- carton");
+  Serial.println("- verre");
+  Serial.println("- non recyclable");
+  Serial.println("- metal");
+}
 
 long readDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
@@ -15,50 +50,103 @@ long readDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
   
   long duration = pulseIn(echoPin, HIGH);
-  long distance = duration * 0.034 / 2; // Convertir en cm
-  return distance;
+  return duration * 0.034 / 2; // Conversion en cm
 }
 
-void setup() {
-  delay(2000);
-  Serial.begin(9600);
-  for (int i = 0; i < NB_CAPTEURS; i++) {
-    pinMode(trigPins[i], OUTPUT);
-    pinMode(echoPins[i], INPUT);
+void moveServo(int servoNum, int targetAngle, int delayTime = 15) {
+  int currentPos = servos[servoNum].read();
+  
+  if(currentPos < targetAngle) {
+    for(int angle = currentPos; angle <= targetAngle; angle++) {
+      servos[servoNum].write(angle);
+      delay(delayTime);
+    }
+  } else {
+    for(int angle = currentPos; angle >= targetAngle; angle--) {
+      servos[servoNum].write(angle);
+      delay(delayTime);
+    }
   }
-  monServo.attach(11);
 }
 
-void loop() {
-  // 1. Faire l'aller-retour du servo
-  for (int pos = 0; pos <= 180; pos++) {
-    monServo.write(pos);
-    delay(15);
-  }
-
-  delay(1000); // Pause à 180°
-
-  for (int pos = 180; pos >= 0; pos--) {
-    monServo.write(pos);
-    delay(15);
-  }
-
-  delay(1000); // Pause à 0°
-
-  // 2. Lire et afficher les distances des capteurs
+bool checkNiveauxPoubelles() {
+  bool tousPleins = true;
+  Serial.println("\nVérification des niveaux:");
+  
   for (int i = 0; i < NB_CAPTEURS; i++) {
     long distance = readDistance(trigPins[i], echoPins[i]);
-    Serial.print("Capteur ");
-    Serial.print(i + 1);
-    Serial.print(" : ");
-    if (distance < 10) {
-      Serial.println("Le bac est plein !");
+    Serial.print("Bac ");
+    Serial.print(i+1);
+    Serial.print(": ");
+    
+    if (distance < DISTANCE_PLEIN) {
+      Serial.println("PLEIN");
     } else {
       Serial.print(distance);
       Serial.println(" cm");
+      tousPleins = false;
+    }
+    delay(100); // Pause entre les mesures
+  }
+  
+  return tousPleins;
+}
+
+bool executeSequence(String input) {
+  input.trim();
+  sequenceComplete = false;
+
+  for(int i = 0; i < 5; i++) {
+    if(input.equalsIgnoreCase(mots[i])) {
+      Serial.println("\nDébut de la séquence...");
+      
+      // Mouvement des servos
+      moveServo(0, anglesServo1[i]);
+      delay(1000);
+      moveServo(1, 90);
+      delay(1000);
+      moveServo(2, (i % 2 == 0) ? 25 : 45);
+      delay(1000);
+      moveServo(3, 180);
+      delay(1000);
+
+      // Retour aux positions initiales
+      moveServo(3, initialPositions[3]);
+      delay(500);
+      moveServo(2, initialPositions[2]);
+      delay(500);
+      moveServo(1, initialPositions[1]);
+      delay(500);
+      moveServo(0, initialPositions[0]);
+
+      sequenceComplete = true;
+      Serial.println("Séquence terminée");
+      return true;
     }
   }
+  return false;
+}
 
-  // 3. Attendre pour que le cycle se répète toutes les minutes
-  delay(30000); // 30 secondes pour compléter les ~60 sec cycle total
+void loop() {
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    
+    if(executeSequence(input)) {
+      // Après la séquence, vérifier les niveaux
+      if(checkNiveauxPoubelles()) {
+        Serial.println("Attention: Tous les bacs sont pleins!");
+      } else {
+        Serial.println("Certains bacs ont encore de la place");
+      }
+    } else {
+      Serial.println("Commande non reconnue");
+    }
+  }
+  
+  // Vérification périodique des niveaux (toutes les 10s)
+  static unsigned long dernierCheck = 0;
+  if(millis() - dernierCheck > 10000) {
+    dernierCheck = millis();
+    checkNiveauxPoubelles();
+  }
 }
