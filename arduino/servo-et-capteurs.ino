@@ -142,11 +142,4 @@ void loop() {
       Serial.println("Commande non reconnue");
     }
   }
-  
-  // Vérification périodique des niveaux (toutes les 10s)
-  static unsigned long dernierCheck = 0;
-  if(millis() - dernierCheck > 10000) {
-    dernierCheck = millis();
-    checkNiveauxPoubelles();
-  }
 }
