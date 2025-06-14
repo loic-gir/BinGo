@@ -25,42 +25,25 @@
     </div>
   </div>
 
-  <div class="shadow_css" id="shadow" onclick="hideLog()"></div>
+  <div class="shadow" id="shadow" onclick="hideLog()"></div>
+
   <div class="container">
-    <div id="bins">
-      <div class="bin" id="bin-0">
-        <div class="bin-label" id="label-0">🗑️ Bac 1 : 0%</div>
-        <div class="progress">
-          <div class="progress-bar" id="bar-0" style="width:0%; background-color:#4caf50">0%</div>
-        </div>
+    <div class="dashboard-grid">
+      <div class="bins-section">
+        <h2>Niveaux des bacs</h2>
+        <div id="bins"></div>
       </div>
-      <div class="bin" id="bin-1">
-        <div class="bin-label" id="label-1">🗑️ Bac 2 : 0%</div>
-        <div class="progress">
-          <div class="progress-bar" id="bar-1" style="width:0%; background-color:#4caf50">0%</div>
-        </div>
-      </div>
-      <div class="bin" id="bin-2">
-        <div class="bin-label" id="label-2">🗑️ Bac 3 : 0%</div>
-        <div class="progress">
-          <div class="progress-bar" id="bar-2" style="width:0%; background-color:#4caf50">0%</div>
-        </div>
-      </div>
-      <div class="bin" id="bin-3">
-        <div class="bin-label" id="label-3">🗑️ Bac 4 : 0%</div>
-        <div class="progress">
-          <div class="progress-bar" id="bar-3" style="width:0%; background-color:#4caf50">0%</div>
-        </div>
-      </div>
-      <div class="bin" id="bin-4">
-        <div class="bin-label" id="label-4">🗑️ Bac 5 : 0%</div>
-        <div class="progress">
-          <div class="progress-bar" id="bar-4" style="width:0%; background-color:#4caf50">0%</div>
-        </div>
+
+      <div class="stats-section">
+        <h2>Statistiques des déchets</h2>
+        <div id="stats" class="stats-grid"></div>
+        <div class="total-waste" id="totalWaste">Total déchets: 0</div>
       </div>
     </div>
 
-    <div class="last-update" id="lastUpdate">Dernière mise à jour : --</div>
+    <div class="footer">
+      <div id="updateStatus" class="update-status"></div>
+    </div>
   </div>
 
 </body>

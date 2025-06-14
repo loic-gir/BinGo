@@ -1,52 +1,167 @@
 // === CONFIGURATION ===
 const UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsY";
 const DEVICE = "BinGo";
-const variables = ["niveau_bac1", "niveau_bac2", "niveau_bac3", "niveau_bac4", "niveau_bac5"];
+
+const LEVEL_VARS = ["niveau_bac1", "niveau_bac2", "niveau_bac3", "niveau_bac4", "niveau_bac5"];
+const WASTE_VARS = ["plastique", "papier_carton", "verre", "metal", "non_recyclable"];
 
 const SPREADSHEET_ID = "1H5oOlzpMnm91YhuOPa82Yi_8R4Vn2gIJLphG5Lt5HSU";
 const API_KEY = "AIzaSyAt5tmQzLb91C7SgmYozzOLh72XmCNbxpc";
 const SHEET_NAME = "Feuille 1";
 
-// === BACS UBIDOTS ===
-async function fetchData() {
-    let dataRecu = false;
+// Icônes et labels
+const WASTE_CONFIG = {
+    "plastique": { icon: "🧴", label: "Plastique" },
+    "papier_carton": { icon: "📄", label: "Papier/Carton" },
+    "verre": { icon: "🍾", label: "Verre" },
+    "metal": { icon: "🥫", label: "Métal" },
+    "non_recyclable": { icon: "🗑️", label: "Non recyclable" }
+};
 
-    for (let i = 0; i < variables.length; i++) {
-        let valAffiche;
+// Variables globales
+let isUsingMockData = false;
 
+// Initialisation de l'affichage
+function initDisplay() {
+    initBins();
+    initStats();
+}
+
+function initBins() {
+    const binsContainer = document.getElementById('bins');
+    binsContainer.innerHTML = LEVEL_VARS.map((_, i) => `
+    <div class="bin" id="bin-${i}">
+      <div class="bin-label" id="label-${i}">🗑️ Bac ${i + 1} : 0%</div>
+      <div class="progress">
+        <div class="progress-bar" id="bar-${i}" style="width:0%">0%</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function initStats() {
+    const statsContainer = document.getElementById('stats');
+    statsContainer.innerHTML = WASTE_VARS.map((waste, i) => `
+    <div class="stat-item" id="stat-${i}">
+      <div class="stat-icon">${WASTE_CONFIG[waste].icon}</div>
+      <div class="stat-info">
+        <div class="stat-label">${WASTE_CONFIG[waste].label}</div>
+        <div class="stat-value" id="stat-value-${i}">0</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Fonction pour récupérer les données
+async function fetchAllData() {
+    let totalWaste = 0;
+    isUsingMockData = false;
+
+    // Récupération des niveaux des bacs
+    for (let i = 0; i < LEVEL_VARS.length; i++) {
         try {
             const res = await fetch(
-                `https://stem.ubidots.com/api/v1.6/devices/${DEVICE}/${variables[i]}/lv`,
+                `https://stem.ubidots.com/api/v1.6/devices/${DEVICE}/${LEVEL_VARS[i]}/lv`,
                 { headers: { "X-Auth-Token": UBIDOTS_TOKEN } }
             );
-            const value = await res.text();
-            const val = parseInt(value);
 
-            valAffiche = !isNaN(val) ? val : Math.floor(Math.random() * 100);
-            if (!isNaN(val)) dataRecu = true;
+            let value = 0;
+            if (res.ok) {
+                const text = await res.text();
+                value = parseInt(text);
+                if (isNaN(value)) {
+                    value = getRandomLevel();
+                    isUsingMockData = true;
+                }
+            } else {
+                value = getRandomLevel();
+                isUsingMockData = true;
+            }
 
-        } catch {
-            valAffiche = Math.floor(Math.random() * 100);
-        }
-
-        const label = document.getElementById(`label-${i}`);
-        const bar = document.getElementById(`bar-${i}`);
-
-        if (label && bar) {
-            label.textContent = `🗑️ Bac ${i + 1} : ${valAffiche}%`;
-            bar.style.width = `${valAffiche}%`;
-            bar.textContent = `${valAffiche}%`;
-
-            bar.style.backgroundColor = valAffiche >= 95 ? "#e53935" : valAffiche >= 60 ? "#ff9800" : "#4caf50";
+            updateBinDisplay(i, value);
+        } catch (e) {
+            updateBinDisplay(i, getRandomLevel());
+            isUsingMockData = true;
+            console.error(`Erreur niveau bac ${i + 1}:`, e);
         }
     }
 
-    const updateText = dataRecu
-        ? "Données Ubidots récupérées avec succès."
-        : "⚠️ Données simulées : Ubidots non joignable.";
+    // Récupération des statistiques de déchets
+    for (let i = 0; i < WASTE_VARS.length; i++) {
+        try {
+            const res = await fetch(
+                `https://stem.ubidots.com/api/v1.6/devices/${DEVICE}/${WASTE_VARS[i]}/lv`,
+                { headers: { "X-Auth-Token": UBIDOTS_TOKEN } }
+            );
 
-    document.getElementById("lastUpdate").textContent =
-        `${updateText} — Dernière mise à jour : ` + new Date().toLocaleString();
+            let count = 0;
+            if (res.ok) {
+                const text = await res.text();
+                count = parseInt(text);
+                if (isNaN(count)) {
+                    count = getRandomWasteCount();
+                    isUsingMockData = true;
+                }
+            } else {
+                count = getRandomWasteCount();
+                isUsingMockData = true;
+            }
+
+            totalWaste += count;
+            updateStatDisplay(i, count);
+        } catch (e) {
+            const count = getRandomWasteCount();
+            totalWaste += count;
+            updateStatDisplay(i, count);
+            isUsingMockData = true;
+            console.error(`Erreur statistique ${WASTE_VARS[i]}:`, e);
+        }
+    }
+
+    // Mise à jour de l'affichage
+    document.getElementById('totalWaste').textContent = `Total déchets: ${totalWaste}`;
+    updateStatus();
+}
+
+function getRandomLevel() {
+    return Math.floor(Math.random() * 100);
+}
+
+function getRandomWasteCount() {
+    return Math.floor(Math.random() * 50);
+}
+
+// Mise à jour de l'affichage
+function updateBinDisplay(index, value) {
+    const label = document.getElementById(`label-${index}`);
+    const bar = document.getElementById(`bar-${index}`);
+
+    if (label && bar) {
+        label.textContent = `🗑️ Bac ${index + 1} : ${value}%`;
+        bar.style.width = `${value}%`;
+        bar.textContent = `${value}`;
+
+        bar.style.backgroundColor = value >= 95 ? "#e53935" :
+            value >= 60 ? "#ff9800" : "#4caf50";
+    }
+}
+
+function updateStatDisplay(index, count) {
+    const statValue = document.getElementById(`stat-value-${index}`);
+    if (statValue) statValue.textContent = count;
+}
+
+function updateStatus() {
+    const now = new Date();
+    const statusElement = document.getElementById('updateStatus');
+
+    if (statusElement) {
+        statusElement.textContent = isUsingMockData
+            ? `⚠ Données simulées - Dernière tentative: ${now.toLocaleString()}`
+            : `✓ Données mises à jour: ${now.toLocaleString()}`;
+
+        statusElement.className = isUsingMockData ? 'update-status error' : 'update-status success';
+    }
 }
 
 // === NOTIFICATIONS GOOGLE SHEETS ===
@@ -59,40 +174,35 @@ async function fetchNotifications() {
         const data = await response.json();
         const rows = data.values;
 
-        notifContent.innerHTML = "";
+        notifContent.innerHTML = rows.length > 1
+            ? rows.slice(1).reverse().slice(0, 10).map(row => `
+                <p>📩 ${row[0]} a atteint ${row[1]}% à ${row[2]}</p>
+            `).join('')
+            : "<p>Aucune notification trouvée</p>";
 
-        if (rows && rows.length > 1) {
-            for (let i = 1; i < rows.length; i++) {
-                const [nom, valeur, datetime] = rows[i];
-                const p = document.createElement("p");
-                p.textContent = `📩 ${nom} a atteint ${valeur}% à ${datetime}`;
-
-                notifContent.appendChild(p);
-            }
-        } else {
-            notifContent.innerHTML = "<p>Aucune notification trouvée.</p>";
-        }
     } catch (error) {
-        console.error("Erreur lors de la récupération des notifications :", error);
+        console.error("Erreur notifications :", error);
         notifContent.innerHTML = "<p>Erreur lors de la récupération des notifications.</p>";
     }
 }
 
 function displayLog() {
-    const log = document.getElementById("notifLog");
-    const shadow = document.getElementById("shadow");
-    log.style.display = "block";
-    shadow.style.display = "block";
+    document.getElementById("notifLog").style.display = "block";
+    document.getElementById("shadow").style.display = "block";
+
     fetchNotifications(); // Rafraîchit les notifications à chaque ouverture
 }
 
 function hideLog() {
-    const log = document.getElementById("notifLog");
-    const shadow = document.getElementById("shadow");
-    log.style.display = "none";
-    shadow.style.display = "none";
+    document.getElementById("notifLog").style.display = "none";
+    document.getElementById("shadow").style.display = "none";
 }
 
-// === Initialisation ===
-fetchData();
-setInterval(fetchData, 10000); // Mise à jour toutes les 10s
+// Initialisation au chargement
+document.addEventListener('DOMContentLoaded', () => {
+    initDisplay();
+    fetchAllData();
+
+    // Mise à jour toutes les 10 secondes
+    setInterval(fetchAllData, 10000);
+});
