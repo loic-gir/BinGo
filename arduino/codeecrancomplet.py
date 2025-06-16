@@ -16,7 +16,9 @@ import math
 from sklearn.preprocessing import LabelEncoder
 import warnings
 from typing import Dict, Optional, Callable
-
+import serial
+from flask import Flask, render_template_string, jsonify
+import requests
 
 # Suppress NumPy warnings about subnormal values
 warnings.filterwarnings("ignore", category=UserWarning, module="numpy.core.getlimits")
@@ -24,19 +26,19 @@ warnings.filterwarnings("ignore", category=UserWarning, module="numpy.core.getli
 # === Configuration ===
 class Config:
     # Chemins
-    MODEL_PATH = "/home/bingo/Desktop/poubelle/model(4).tflite"
-    LABELS_PATH = "label_encoder(3).pkl"
+    MODEL_PATH = "/home/bingo/Desktop/poubelle/waste_classifier8.tflite"
+    LABELS_PATH = "label_encoder(6).pkl"
     
     # Paramètres de détection optimisés
-    INPUT_SHAPE = (40, 32)  # (hauteur, largeur)
+    INPUT_SHAPE = (224, 224)  # (hauteur, largeur)
     MIN_AREA = 1500   
     MAX_AREA = 150000 
     STABILIZATION_TIME = 3.0   # 3 secondes de stabilisation
-    CONFIDENCE_THRESHOLD = 50  
+    CONFIDENCE_THRESHOLD = 40  
     
     # Nouveaux paramètres pour la stabilisation
-    MIN_DETECTION_FRAMES = 15  # Minimum de frames consécutives nécessaires
-    STABLE_CONFIDENCE_THRESHOLD = 60  # Confiance minimum pour considérer stable
+    MIN_DETECTION_FRAMES = 10  # Minimum de frames consécutives nécessaires
+    STABLE_CONFIDENCE_THRESHOLD = 40  # Confiance minimum pour considérer stable
     
     # Paramètres de prétraitement avancés
     BLUR_KERNEL = (5, 5)  
@@ -83,142 +85,136 @@ class Config:
         "interactive_highlight": "#e0f0ff"
     }
 
-class ArduinoCommunicator:
-    def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 115200):
-        self.port = port
-        self.baudrate = baudrate
-        self.serial_connection = None
-        self.running = False
-        self.thread = None
-        self.data_queue = queue.Queue()
-        self.callbacks = {}
+
+class ArduinoController:
+    def __init__(self, port="/dev/ttyUSB0", baud_rate=115200):
+        self.serial_port = port
+        self.baud_rate = baud_rate
+        self.ser = None
+        self.connected = False
+        self.current_data = {
+            "niveau_bac1": 0, 
+            "niveau_bac2": 0, 
+            "niveau_bac3": 0, 
+            "niveau_bac4": 0, 
+            "niveau_bac5": 0
+        }
+        self.history_data = []
         
-    def initialize(self) -> bool:
-        """Initialise la connexion série avec l'Arduino"""
+        # Configuration Ubidots
+        self.UBIDOTS_TOKEN = "TON_TOKEN_ICI"
+        self.DEVICE_NAME = "BinGo"
+        
+    def connect(self):
+        """Établir la connexion série avec l'Arduino"""
         try:
-            self.serial_connection = serial.Serial(
-                self.port, 
-                self.baudrate, 
-                timeout=2
-            )
-            time.sleep(3)  # Attendre que l'Arduino soit prêt
-            print(f"✅ Connexion série établie sur {self.port}")
+            self.ser = serial.Serial(self.serial_port, self.baud_rate, timeout=2)
+            time.sleep(3)  # Attendre que l'Arduino se réinitialise
+            self.connected = True
+            print(f"✅ Connexion Arduino établie sur {self.serial_port} à {self.baud_rate} bauds")
             return True
         except serial.SerialException as e:
-            print(f"❌ Erreur connexion série: {e}")
+            print(f"❌ Erreur connexion Arduino: {e}")
+            self.connected = False
             return False
     
-    def register_callback(self, message_type: str, callback: Callable):
-        """Enregistre un callback pour un type de message"""
-        self.callbacks[message_type] = callback
-    
-    def send_detection_result(self, detected_class: str) -> bool:
-        """Envoie le résultat de détection à l'Arduino"""
-        if not self.serial_connection:
+    def send_command(self, command):
+        """Envoyer une commande à l'Arduino"""
+        if not self.connected or not self.ser:
+            print("❌ Arduino non connecté")
             return False
         
         try:
-            # Mapper les classes de détection aux mots Arduino
-            class_mapping = {
-                "cardboard_paper": "carton",
-                "plastic": "plastique", 
-                "metal": "metal",
-                "glass": "verre",
-                "trash": "non recyclable"
-            }
-            
-            arduino_command = class_mapping.get(detected_class, "non recyclable")
-            message = f"{arduino_command}\n"
-            
-            self.serial_connection.write(message.encode())
-            print(f"📤 Commande envoyée à Arduino: {arduino_command}")
+            command_with_newline = command + '\n'
+            self.ser.write(command_with_newline.encode('utf-8'))
+            print(f"📤 Commande envoyée: {command}")
             return True
-            
         except Exception as e:
             print(f"❌ Erreur envoi commande: {e}")
             return False
     
-    def request_sensor_data(self):
-        """Demande les données des capteurs à l'Arduino"""
-        if self.serial_connection:
-            try:
-                self.serial_connection.write(b"GET_LEVELS\n")
-            except Exception as e:
-                print(f"❌ Erreur demande capteurs: {e}")
-    
-    def parse_sensor_data(self, line: str) -> Optional[Dict]:
-        """Parse les données des capteurs"""
-        if line.startswith("forSite"):
-            try:
-                values_str = line.replace("forSite", "").strip()
-                values = [float(val) for val in values_str.split(",")]
+    def read_arduino_data(self):
+        """Lire les données de l'Arduino"""
+        if not self.connected or not self.ser:
+            return None
+        
+        try:
+            if self.ser.in_waiting > 0:
+                ligne = self.ser.readline().decode('utf-8').strip()
+                print(f"📥 Arduino: {ligne}")
                 
-                if len(values) == 5:
-                    return {
-                        "niveau_bac1": round(values[0], 1),
-                        "niveau_bac2": round(values[1], 1), 
-                        "niveau_bac3": round(values[2], 1),
-                        "niveau_bac4": round(values[3], 1),
-                        "niveau_bac5": round(values[4], 1),
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                    }
-            except ValueError as e:
-                print(f"❌ Erreur parsing capteurs: {e}")
+                # Parser les données des capteurs
+                if ligne.startswith("forSite"):
+                    return self.parse_sensor_data(ligne)
+                
+                return ligne
+        except Exception as e:
+            print(f"❌ Erreur lecture Arduino: {e}")
+            return None
+    
+    def parse_sensor_data(self, ligne):
+        """Parser les données des capteurs de distance"""
+        try:
+            # Enlève le préfixe "forSite" et parse les valeurs
+            valeurs_str = ligne.replace("forSite", "").strip()
+            valeurs = [float(val) for val in valeurs_str.split(",")]
+            
+            if len(valeurs) == 5:
+                data = {
+                    "niveau_bac1": round(valeurs[0], 0),
+                    "niveau_bac2": round(valeurs[1], 0),
+                    "niveau_bac3": round(valeurs[2], 0),
+                    "niveau_bac4": round(valeurs[3], 0),
+                    "niveau_bac5": round(valeurs[4], 0),
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                # Mettre à jour les données actuelles
+                self.current_data = data
+                self.history_data.append(data)
+                
+                # Garder seulement les 50 dernières valeurs
+                if len(self.history_data) > 50:
+                    self.history_data.pop(0)
+                
+                # Envoyer à Ubidots
+                self.send_to_ubidots(data)
+                
+                return data
+        except ValueError as e:
+            print(f"❌ Erreur parsing données capteurs: {e}")
         return None
     
-    def start_listening(self):
-        """Démarre l'écoute des messages Arduino"""
-        self.running = True
-        self.thread = threading.Thread(target=self._listen_loop, daemon=True)
-        self.thread.start()
+    def send_to_ubidots(self, data):
+        """Envoyer les données à Ubidots"""
+        try:
+            url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{self.DEVICE_NAME}/"
+            headers = {
+                "X-Auth-Token": self.UBIDOTS_TOKEN, 
+                "Content-Type": "application/json"
+            }
+            response = requests.post(url, json=data, headers=headers)
+            print(f"📊 Ubidots: {response.status_code} - {data}")
+        except Exception as e:
+            print(f"❌ Erreur Ubidots: {e}")
     
-    def _listen_loop(self):
-        """Boucle d'écoute des messages Arduino"""
-        while self.running and self.serial_connection:
-            try:
-                if self.serial_connection.in_waiting > 0:
-                    line = self.serial_connection.readline().decode('utf-8').strip()
-                    if line:
-                        print(f"🔄 Arduino: {line}")
-                        self._process_message(line)
-                        
-                time.sleep(0.05)
-                
-            except Exception as e:
-                print(f"❌ Erreur lecture série: {e}")
-                time.sleep(1)
-    
-    def _process_message(self, message: str):
-        """Traite les messages reçus de l'Arduino"""
-        # Données des capteurs
-        sensor_data = self.parse_sensor_data(message)
-        if sensor_data:
-            if "sensor_data" in self.callbacks:
-                self.callbacks["sensor_data"](sensor_data)
-            return
+    def start_monitoring(self):
+        """Démarrer la surveillance en arrière-plan"""
+        def monitor_loop():
+            while self.connected:
+                self.read_arduino_data()
+                time.sleep(0.1)
         
-        # Messages de statut
-        if message.startswith("SEQUENCE_START:"):
-            waste_type = message.split(":")[1]
-            if "sequence_start" in self.callbacks:
-                self.callbacks["sequence_start"](waste_type)
-                
-        elif message.startswith("SEQUENCE_COMPLETE:"):
-            waste_type = message.split(":")[1]
-            if "sequence_complete" in self.callbacks:
-                self.callbacks["sequence_complete"](waste_type)
-                
-        elif message == "ARDUINO_READY":
-            if "arduino_ready" in self.callbacks:
-                self.callbacks["arduino_ready"]()
+        monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+        monitor_thread.start()
+        print("🔄 Surveillance Arduino démarrée")
     
-    def stop(self):
-        """Arrête la communication"""
-        self.running = False
-        if self.thread:
-            self.thread.join(timeout=3)
-        if self.serial_connection:
-            self.serial_connection.close()
+    def disconnect(self):
+        """Fermer la connexion série"""
+        if self.ser:
+            self.ser.close()
+            self.connected = False
+            print("🔌 Arduino déconnecté")
 
 
 # === Système de détection ===
@@ -290,6 +286,7 @@ class DetectionSystem:
             if os.path.exists(Config.MODEL_PATH):
                 self.interpreter = tflite.Interpreter(model_path=Config.MODEL_PATH)
                 self.interpreter.allocate_tensors()
+                print("Input details:",self.interpreter.get_input_details())
             else:
                 raise FileNotFoundError(f"Modèle non trouvé: {Config.MODEL_PATH}")
             
@@ -379,9 +376,9 @@ class DetectionSystem:
         """Prédire la classe de la ROI"""
         try:
             resized = cv2.resize(roi, Config.INPUT_SHAPE)
-            gray_resized = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
-            input_data = gray_resized.astype(np.float32) / 255.0
-            input_data = input_data.flatten().reshape(1, -1)
+            input_data = resized.astype(np.float32)
+            input_data = input_data / 127.5 - 1.0
+            input_data = np.expand_dims(input_data, axis=0)
             self.interpreter.set_tensor(input_details[0]['index'], input_data)
             self.interpreter.invoke()
             output_data = self.interpreter.get_tensor(output_details[0]['index'])[0]
@@ -670,30 +667,6 @@ class MainApplication(tk.Tk):
         self.create_interface()
         self.start_systems()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.arduino = ArduinoCommunicator("/dev/ttyUSB0", 115200)
-        self.setup_arduino_callbacks()
-
-    def setup_arduino_callbacks(self):
-        """Configure les callbacks Arduino"""
-        self.arduino.register_callback("sensor_data", self.handle_sensor_data)
-        self.arduino.register_callback("sequence_start", self.handle_sequence_start)
-        self.arduino.register_callback("sequence_complete", self.handle_sequence_complete)
-        self.arduino.register_callback("arduino_ready", self.handle_arduino_ready)
-
-    def handle_sequence_start(self, waste_type):
-        """Gère le début d'une séquence de tri"""
-        self.update_status(f"🔄 Tri en cours: {waste_type}")
-    
-    def handle_sequence_complete(self, waste_type):
-        """Gère la fin d'une séquence de tri"""
-        self.update_status(f"✅ Tri terminé: {waste_type}")
-        # Retour à l'état d'attente après 2 secondes
-        self.after(2000, self.return_to_waiting)
-    
-    def handle_arduino_ready(self):
-        """Arduino est prêt"""
-        self.update_status("🤖 Arduino connecté et prêt")
-    
 
     def create_interface(self):
         main_container = tk.Frame(self, bg=Config.COLORS["background"], padx=15, pady=10)
@@ -996,22 +969,16 @@ class MainApplication(tk.Tk):
                      bg=Config.COLORS["card"], fg=Config.COLORS["text_primary"]).pack(side="left")
             tk.Label(info_frame, text=f"{count} ({percentage:.1f}%)", font=("Segoe UI", Config.FONT_SIZE_SMALL, "bold"),
                      bg=Config.COLORS["card"], fg=color).pack(side="right")
-            if self.stats["total"] > 0:
-                progress_bg = tk.Frame(cat_frame, bg=Config.COLORS["border"], height=3)
-                progress_bg.pack(fill="x", pady=(2, 0))
-                if count > 0:
-                    progress_fill = tk.Frame(progress_bg, bg=color, height=3)
-                    progress_fill.place(x=0, y=0, relwidth=percentage/100, height=3)
+            #if self.stats["total"] > 0:
+                #progress_bg = tk.Frame(cat_frame, bg=Config.COLORS["border"], height=3)
+                #progress_bg.pack(fill="x", pady=(2, 0))
+                #if count > 0:
+                    #progress_fill = tk.Frame(progress_bg, bg=color, height=3)
+                    #progress_fill.place(x=0, y=0, relwidth=percentage/100, height=3)
 
     def start_systems(self):
-        """Démarre tous les systèmes"""
-        # Démarrer Arduino
-        if self.arduino.initialize():
-            self.arduino.start_listening()
-        
-        # Démarrer la détection
         self.detection.start(self)
-        self.update_status("Tous les systèmes démarrés")
+        self.update_status("Détection active")
         self.check_detections()
 
     def check_detections(self):
@@ -1035,12 +1002,6 @@ class MainApplication(tk.Tk):
 
     def handle_detection(self, label, confidence):
         print(f"DÉTECTION CONFIRMÉE après 3s: {label} ({confidence:.1f}%)")
-        # Envoi de la commande à l'Arduino
-        success = self.arduino.send_detection_result(label)
-        if success:
-            self.update_status(f"Commande envoyée à Arduino: {label}")
-        else:
-            self.update_status("❌ Erreur communication Arduino")
         self.update_stats(label)
         self.create_result_display(label, confidence)
         self.current_result = (label, confidence)
@@ -1106,20 +1067,89 @@ class MainApplication(tk.Tk):
         print("Fermeture de l'application...")
         self.detection.stop()
         self.destroy()
+class EnhancedCommunicationSystem(CommunicationSystem):
+    def __init__(self):
+        super().__init__()
+        self.arduino = ArduinoController()
+        
+    def initialize_arduino(self):
+        """Initialiser la connexion Arduino"""
+        if self.arduino.connect():
+            self.arduino.start_monitoring()
+            return True
+        return False
+    
+    def send_classification_to_arduino(self, label):
+        """Envoyer la classification à l'Arduino pour actionner les servos"""
+        # Mapper les labels de votre système vers les commandes Arduino
+        label_mapping = {
+            "plastic": "plastique",
+            "cardboard_paper": "carton", 
+            "glass": "verre",
+            "metal": "metal",
+            "trash": "non recyclable"
+        }
+        
+        arduino_command = label_mapping.get(label, "non recyclable")
+        return self.arduino.send_command(arduino_command)
+    
+    def get_bin_levels(self):
+        """Obtenir les niveaux actuels des bacs"""
+        return self.arduino.current_data
 
+# Modification de votre classe MainApplication
+class EnhancedMainApplication(MainApplication):
+    def __init__(self, comm_system, detection_system):
+        super().__init__(comm_system, detection_system)
+        
+        # Initialiser l'Arduino
+        if self.comm.initialize_arduino():
+            print("✅ Arduino connecté et prêt")
+        else:
+            print("⚠️ Arduino non disponible - Mode simulation")
+    
+    def handle_detection(self, label, confidence):
+        """Gestion améliorée des détections avec contrôle Arduino"""
+        print(f"DÉTECTION CONFIRMÉE: {label} ({confidence:.1f}%)")
+        
+        # Envoyer la commande à l'Arduino
+        if hasattr(self.comm, 'send_classification_to_arduino'):
+            success = self.comm.send_classification_to_arduino(label)
+            if success:
+                print(f"🤖 Commande Arduino envoyée: {label}")
+            else:
+                print("⚠️ Échec envoi commande Arduino")
+        
+        # Continuer avec le traitement normal
+        self.update_stats(label)
+        self.create_result_display(label, confidence)
+        self.current_result = (label, confidence)
+        
+        if self.result_timer:
+            self.after_cancel(self.result_timer)
+        self.result_timer = self.after(2000, self.return_to_waiting)
+        
+        self.update_status(f"✅ CONFIRMÉ: {label} - Arduino activé")
+        self.start_countdown_status(label)
 # === Point d'entrée principal ===
 def main():
-    print("Démarrage de BinGo")
-    print("========================================================")
+    print("🚀 Démarrage de BinGo avec contrôle Arduino")
+    print("=" * 60)
+    
     try:
-        comm_system = CommunicationSystem()
+        # Utiliser les classes améliorées
+        comm_system = EnhancedCommunicationSystem()
         detection_system = DetectionSystem(comm_system)
-        app = MainApplication(comm_system, detection_system)
+        app = EnhancedMainApplication(comm_system, detection_system)
+        
         print("✅ Interface utilisateur créée")
-        print("🎯 Système de détection initialisé")
-        print("=" * 50)
+        print("🎯 Système de détection initialisé") 
+        print("🤖 Contrôleur Arduino intégré")
+        print("=" * 60)
         print("BinGo est prêt à fonctionner!")
+        
         app.mainloop()
+        
     except KeyboardInterrupt:
         print("\n🛑 Arrêt demandé par l'utilisateur")
     except Exception as e:
