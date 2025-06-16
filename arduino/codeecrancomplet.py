@@ -63,7 +63,7 @@ class Config:
     ARDUINO_PORT = "/dev/ttyUSB0"  # Adapte selon ton port
     ARDUINO_BAUD = 115200
     
-    UBIDOTS_TOKEN = "VOTRE_VRAI_TOKEN_ICI"  # Mettez votre vrai token
+    UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsY"
     DEVICE_NAME = "BinGo"
     
     # Palette moderne avec dégradés
