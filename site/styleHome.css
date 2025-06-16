@@ -1,0 +1,109 @@
+body {
+    background: url('bg.jpg') no-repeat center center fixed;
+    background-size: cover;
+    width: 100%;
+}
+
+.presentation {
+    /* position: relative; */
+    overflow: hidden;
+}
+
+.presentation p {
+    margin-bottom: 1rem;
+}
+
+.technique ul {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.technique li {
+    padding: 1rem;
+    background: #f0f3f5;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.technique li:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.technique li::before {
+    content: '✦';
+    left: 1rem;
+    padding-right: 1rem;
+}
+
+.equipe {
+    display: flex;
+    flex-direction: column;
+}
+
+.membre {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+}
+
+.membre-left {
+    align-self: flex-start;
+}
+
+.membre-right {
+    align-self: flex-end;
+    right: 0;
+}
+
+.parole-left {
+    margin-left: 15px;
+}
+
+.parole-right {
+    margin-right: 15px;
+}
+
+.membre-right,
+.membre-left {
+    padding: 1rem;
+}
+
+.parole-right,
+.parole-left {
+    background-color: #f0f3f5;
+    padding: 1rem;
+    background: #f0f3f5;
+    border-radius: 8px;
+}
+
+.taches table {
+    width: 100%;
+    margin-top: 1.5rem;
+}
+
+.taches th,
+.taches td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.taches th {
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .technique ul {
+        grid-template-columns: 1fr;
+    }
+
+    .taches table {
+        display: block;
+        overflow-x: auto;
+    }
+}
