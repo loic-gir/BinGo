@@ -15,9 +15,7 @@ import os
 import math
 from sklearn.preprocessing import LabelEncoder
 import warnings
-from typing import Dict, Optional, Callable
 import serial
-from flask import Flask, render_template_string, jsonify
 import requests
 
 # Suppress NumPy warnings about subnormal values
@@ -59,6 +57,14 @@ class Config:
     FONT_SIZE_SMALL = 8   # Réduit
     EMOJI_SIZE = 24       # Réduit
     
+    # Configuration Arduino
+    ARDUINO_PORT = "/dev/ttyUSB0"  # Adapte selon ton port
+    ARDUINO_BAUD = 115200
+    
+    # Configuration Ubidots
+    UBIDOTS_TOKEN = "TON_TOKEN_ICI"
+    DEVICE_NAME = "BinGo"
+    
     # Palette moderne avec dégradés
     COLORS = {
         "primary": "#6366F1",
@@ -85,137 +91,97 @@ class Config:
         "interactive_highlight": "#e0f0ff"
     }
 
+# Variables globales pour Arduino et Ubidots
+arduino_serial = None
+current_data = {"niveau_bac1": 0, "niveau_bac2": 0, "niveau_bac3": 0, "niveau_bac4": 0, "niveau_bac5": 0}
+history_data = []
 
-class ArduinoController:
-    def __init__(self, port="/dev/ttyUSB0", baud_rate=115200):
-        self.serial_port = port
-        self.baud_rate = baud_rate
-        self.ser = None
-        self.connected = False
-        self.current_data = {
-            "niveau_bac1": 0, 
-            "niveau_bac2": 0, 
-            "niveau_bac3": 0, 
-            "niveau_bac4": 0, 
-            "niveau_bac5": 0
-        }
-        self.history_data = []
-        
-        # Configuration Ubidots
-        self.UBIDOTS_TOKEN = "TON_TOKEN_ICI"
-        self.DEVICE_NAME = "BinGo"
-        
-    def connect(self):
-        """Établir la connexion série avec l'Arduino"""
-        try:
-            self.ser = serial.Serial(self.serial_port, self.baud_rate, timeout=2)
-            time.sleep(3)  # Attendre que l'Arduino se réinitialise
-            self.connected = True
-            print(f"✅ Connexion Arduino établie sur {self.serial_port} à {self.baud_rate} bauds")
-            return True
-        except serial.SerialException as e:
-            print(f"❌ Erreur connexion Arduino: {e}")
-            self.connected = False
-            return False
-    
-    def send_command(self, command):
-        """Envoyer une commande à l'Arduino"""
-        if not self.connected or not self.ser:
-            print("❌ Arduino non connecté")
-            return False
-        
+def init_arduino():
+    """Initialiser la connexion Arduino"""
+    global arduino_serial
+    try:
+        arduino_serial = serial.Serial(Config.ARDUINO_PORT, Config.ARDUINO_BAUD, timeout=2)
+        time.sleep(3)  # Attendre que l'Arduino se réinitialise
+        print(f"✅ Arduino connecté sur {Config.ARDUINO_PORT} à {Config.ARDUINO_BAUD} bauds")
+        return True
+    except serial.SerialException as e:
+        print(f"❌ Erreur connexion Arduino: {e}")
+        arduino_serial = None
+        return False
+
+def send_arduino_command(command):
+    """Envoyer une commande à l'Arduino"""
+    global arduino_serial
+    if arduino_serial and arduino_serial.is_open:
         try:
             command_with_newline = command + '\n'
-            self.ser.write(command_with_newline.encode('utf-8'))
-            print(f"📤 Commande envoyée: {command}")
+            arduino_serial.write(command_with_newline.encode('utf-8'))
+            print(f"📤 Commande Arduino: {command}")
             return True
         except Exception as e:
             print(f"❌ Erreur envoi commande: {e}")
             return False
-    
-    def read_arduino_data(self):
-        """Lire les données de l'Arduino"""
-        if not self.connected or not self.ser:
-            return None
-        
+    else:
+        print("⚠️ Arduino non connecté")
+        return False
+
+def envoyer_donnees(device, variables):
+    """Envoyer données à Ubidots"""
+    try:
+        url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{device}/"
+        headers = {"X-Auth-Token": Config.UBIDOTS_TOKEN, "Content-Type": "application/json"}
+        response = requests.post(url, json=variables, headers=headers)
+        print(f"📊 Ubidots: {response.status_code} - {variables}")
+    except Exception as e:
+        print(f"❌ Erreur Ubidots: {e}")
+
+def lire_arduino():
+    """Lire les données de l'Arduino"""
+    global arduino_serial, current_data, history_data
+    if arduino_serial and arduino_serial.is_open:
         try:
-            if self.ser.in_waiting > 0:
-                ligne = self.ser.readline().decode('utf-8').strip()
+            if arduino_serial.in_waiting > 0:
+                ligne = arduino_serial.readline().decode('utf-8').strip()
                 print(f"📥 Arduino: {ligne}")
                 
-                # Parser les données des capteurs
                 if ligne.startswith("forSite"):
-                    return self.parse_sensor_data(ligne)
-                
+                    try:
+                        # Enlève le préfixe et garde seulement les valeurs
+                        valeurs_str = ligne.replace("forSite", "").strip()
+                        valeurs = [float(val) for val in valeurs_str.split(",")]
+                        
+                        if len(valeurs) == 5:
+                            data = {
+                                "niveau_bac1": round(valeurs[0], 0),
+                                "niveau_bac2": round(valeurs[1], 0),
+                                "niveau_bac3": round(valeurs[2], 0),
+                                "niveau_bac4": round(valeurs[3], 0),
+                                "niveau_bac5": round(valeurs[4], 0),
+                                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                            
+                            # Mettre à jour les données
+                            current_data = data
+                            history_data.append(data)
+                            if len(history_data) > 50:
+                                history_data.pop(0)
+                            
+                            # Envoyer à Ubidots
+                            envoyer_donnees(Config.DEVICE_NAME, data)
+                            
+                            return data
+                    except ValueError:
+                        print("❌ Erreur parsing données capteurs")
                 return ligne
         except Exception as e:
             print(f"❌ Erreur lecture Arduino: {e}")
-            return None
-    
-    def parse_sensor_data(self, ligne):
-        """Parser les données des capteurs de distance"""
-        try:
-            # Enlève le préfixe "forSite" et parse les valeurs
-            valeurs_str = ligne.replace("forSite", "").strip()
-            valeurs = [float(val) for val in valeurs_str.split(",")]
-            
-            if len(valeurs) == 5:
-                data = {
-                    "niveau_bac1": round(valeurs[0], 0),
-                    "niveau_bac2": round(valeurs[1], 0),
-                    "niveau_bac3": round(valeurs[2], 0),
-                    "niveau_bac4": round(valeurs[3], 0),
-                    "niveau_bac5": round(valeurs[4], 0),
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                }
-                
-                # Mettre à jour les données actuelles
-                self.current_data = data
-                self.history_data.append(data)
-                
-                # Garder seulement les 50 dernières valeurs
-                if len(self.history_data) > 50:
-                    self.history_data.pop(0)
-                
-                # Envoyer à Ubidots
-                self.send_to_ubidots(data)
-                
-                return data
-        except ValueError as e:
-            print(f"❌ Erreur parsing données capteurs: {e}")
-        return None
-    
-    def send_to_ubidots(self, data):
-        """Envoyer les données à Ubidots"""
-        try:
-            url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{self.DEVICE_NAME}/"
-            headers = {
-                "X-Auth-Token": self.UBIDOTS_TOKEN, 
-                "Content-Type": "application/json"
-            }
-            response = requests.post(url, json=data, headers=headers)
-            print(f"📊 Ubidots: {response.status_code} - {data}")
-        except Exception as e:
-            print(f"❌ Erreur Ubidots: {e}")
-    
-    def start_monitoring(self):
-        """Démarrer la surveillance en arrière-plan"""
-        def monitor_loop():
-            while self.connected:
-                self.read_arduino_data()
-                time.sleep(0.1)
-        
-        monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
-        monitor_thread.start()
-        print("🔄 Surveillance Arduino démarrée")
-    
-    def disconnect(self):
-        """Fermer la connexion série"""
-        if self.ser:
-            self.ser.close()
-            self.connected = False
-            print("🔌 Arduino déconnecté")
+    return None
 
+def arduino_monitor_thread():
+    """Thread de surveillance Arduino en arrière-plan"""
+    while True:
+        lire_arduino()
+        time.sleep(0.1)
 
 # === Système de détection ===
 class DetectionSystem:
@@ -969,14 +935,17 @@ class MainApplication(tk.Tk):
                      bg=Config.COLORS["card"], fg=Config.COLORS["text_primary"]).pack(side="left")
             tk.Label(info_frame, text=f"{count} ({percentage:.1f}%)", font=("Segoe UI", Config.FONT_SIZE_SMALL, "bold"),
                      bg=Config.COLORS["card"], fg=color).pack(side="right")
-            #if self.stats["total"] > 0:
-                #progress_bg = tk.Frame(cat_frame, bg=Config.COLORS["border"], height=3)
-                #progress_bg.pack(fill="x", pady=(2, 0))
-                #if count > 0:
-                    #progress_fill = tk.Frame(progress_bg, bg=color, height=3)
-                    #progress_fill.place(x=0, y=0, relwidth=percentage/100, height=3)
 
     def start_systems(self):
+        # Initialiser Arduino
+        if init_arduino():
+            print("✅ Arduino connecté et prêt")
+            # Démarrer le thread de surveillance Arduino
+            arduino_thread = threading.Thread(target=arduino_monitor_thread, daemon=True)
+            arduino_thread.start()
+        else:
+            print("⚠️ Arduino non disponible - Mode simulation")
+        
         self.detection.start(self)
         self.update_status("Détection active")
         self.check_detections()
@@ -1002,6 +971,22 @@ class MainApplication(tk.Tk):
 
     def handle_detection(self, label, confidence):
         print(f"DÉTECTION CONFIRMÉE après 3s: {label} ({confidence:.1f}%)")
+        
+        # ENVOYER LA COMMANDE À L'ARDUINO
+        label_mapping = {
+            "cardboard_paper": "carton",
+            "plastic": "plastique", 
+            "metal": "metal",
+            "glass": "verre",
+            "trash": "non recyclable"
+        }
+        arduino_command = label_mapping.get(label, "non recyclable")
+        
+        if send_arduino_command(arduino_command):
+            print(f"🤖 Commande Arduino envoyée: {arduino_command}")
+        else:
+            print("⚠️ Échec envoi commande Arduino")
+        
         self.update_stats(label)
         self.create_result_display(label, confidence)
         self.current_result = (label, confidence)
@@ -1009,7 +994,7 @@ class MainApplication(tk.Tk):
             self.after_cancel(self.result_timer)
         self.result_timer = self.after(2000, self.return_to_waiting)
         print("Objet classifié")
-        self.update_status(f"CONFIRMÉ: {label} - Retour dans 2s")
+        self.update_status(f"✅ CONFIRMÉ: {label} - Arduino activé")
         self.start_countdown_status(label)
 
     def start_countdown_status(self, label):
@@ -1065,91 +1050,26 @@ class MainApplication(tk.Tk):
 
     def on_closing(self):
         print("Fermeture de l'application...")
+        global arduino_serial
+        if arduino_serial:
+            arduino_serial.close()
         self.detection.stop()
         self.destroy()
-class EnhancedCommunicationSystem(CommunicationSystem):
-    def __init__(self):
-        super().__init__()
-        self.arduino = ArduinoController()
-        
-    def initialize_arduino(self):
-        """Initialiser la connexion Arduino"""
-        if self.arduino.connect():
-            self.arduino.start_monitoring()
-            return True
-        return False
-    
-    def send_classification_to_arduino(self, label):
-        """Envoyer la classification à l'Arduino pour actionner les servos"""
-        # Mapper les labels de votre système vers les commandes Arduino
-        label_mapping = {
-            "plastic": "plastique",
-            "cardboard_paper": "carton", 
-            "glass": "verre",
-            "metal": "metal",
-            "trash": "non recyclable"
-        }
-        
-        arduino_command = label_mapping.get(label, "non recyclable")
-        return self.arduino.send_command(arduino_command)
-    
-    def get_bin_levels(self):
-        """Obtenir les niveaux actuels des bacs"""
-        return self.arduino.current_data
 
-# Modification de votre classe MainApplication
-class EnhancedMainApplication(MainApplication):
-    def __init__(self, comm_system, detection_system):
-        super().__init__(comm_system, detection_system)
-        
-        # Initialiser l'Arduino
-        if self.comm.initialize_arduino():
-            print("✅ Arduino connecté et prêt")
-        else:
-            print("⚠️ Arduino non disponible - Mode simulation")
-    
-    def handle_detection(self, label, confidence):
-        """Gestion améliorée des détections avec contrôle Arduino"""
-        print(f"DÉTECTION CONFIRMÉE: {label} ({confidence:.1f}%)")
-        
-        # Envoyer la commande à l'Arduino
-        if hasattr(self.comm, 'send_classification_to_arduino'):
-            success = self.comm.send_classification_to_arduino(label)
-            if success:
-                print(f"🤖 Commande Arduino envoyée: {label}")
-            else:
-                print("⚠️ Échec envoi commande Arduino")
-        
-        # Continuer avec le traitement normal
-        self.update_stats(label)
-        self.create_result_display(label, confidence)
-        self.current_result = (label, confidence)
-        
-        if self.result_timer:
-            self.after_cancel(self.result_timer)
-        self.result_timer = self.after(2000, self.return_to_waiting)
-        
-        self.update_status(f"✅ CONFIRMÉ: {label} - Arduino activé")
-        self.start_countdown_status(label)
 # === Point d'entrée principal ===
 def main():
     print("🚀 Démarrage de BinGo avec contrôle Arduino")
     print("=" * 60)
-    
     try:
-        # Utiliser les classes améliorées
-        comm_system = EnhancedCommunicationSystem()
+        comm_system = CommunicationSystem()
         detection_system = DetectionSystem(comm_system)
-        app = EnhancedMainApplication(comm_system, detection_system)
-        
+        app = MainApplication(comm_system, detection_system)
         print("✅ Interface utilisateur créée")
         print("🎯 Système de détection initialisé") 
         print("🤖 Contrôleur Arduino intégré")
         print("=" * 60)
         print("BinGo est prêt à fonctionner!")
-        
         app.mainloop()
-        
     except KeyboardInterrupt:
         print("\n🛑 Arrêt demandé par l'utilisateur")
     except Exception as e:
