@@ -17,6 +17,8 @@ from sklearn.preprocessing import LabelEncoder
 import warnings
 import serial
 import requests
+from flask import Flask, render_template_string, jsonify
+from flask_cors import CORS
 
 # Suppress NumPy warnings about subnormal values
 warnings.filterwarnings("ignore", category=UserWarning, module="numpy.core.getlimits")
@@ -61,8 +63,7 @@ class Config:
     ARDUINO_PORT = "/dev/ttyUSB0"  # Adapte selon ton port
     ARDUINO_BAUD = 115200
     
-    # Configuration Ubidots
-    UBIDOTS_TOKEN = "TON_TOKEN_ICI"
+    UBIDOTS_TOKEN = "VOTRE_VRAI_TOKEN_ICI"  # Mettez votre vrai token
     DEVICE_NAME = "BinGo"
     
     # Palette moderne avec dégradés
@@ -182,6 +183,36 @@ def arduino_monitor_thread():
     while True:
         lire_arduino()
         time.sleep(0.1)
+
+# === SERVEUR WEB FLASK ===
+app = Flask(__name__)
+CORS(app)  # Permet les requêtes depuis votre site Netlify
+
+# Routes Flask pour votre site
+@app.route('/api/data')
+def get_data():
+    """API pour récupérer les données des bacs"""
+    global current_data
+    return jsonify(current_data)
+
+@app.route('/api/history')
+def get_history():
+    """API pour récupérer l'historique"""
+    global history_data
+    return jsonify(history_data)
+
+@app.route('/')
+def index():
+    """Page d'accueil simple"""
+    return jsonify({
+        "status": "BinGo API Active",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "data": current_data
+    })
+
+def start_flask_server():
+    """Démarrer le serveur Flask en arrière-plan"""
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
 # === Système de détection ===
 class DetectionSystem:
@@ -945,6 +976,12 @@ class MainApplication(tk.Tk):
             arduino_thread.start()
         else:
             print("⚠️ Arduino non disponible - Mode simulation")
+
+          # NOUVEAU : Démarrer le serveur Flask
+        flask_thread = threading.Thread(target=start_flask_server, daemon=True)
+        flask_thread.start()
+        print("🌐 Serveur Flask démarré sur http://localhost:5000")
+    
         
         self.detection.start(self)
         self.update_status("Détection active")
