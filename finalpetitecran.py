@@ -22,19 +22,19 @@ warnings.filterwarnings("ignore", category=UserWarning, module="numpy.core.getli
 # === Configuration ===
 class Config:
     # Chemins
-    MODEL_PATH = "/home/bingo/Desktop/poubelle/model(4).tflite"
-    LABELS_PATH = "label_encoder(3).pkl"
+    MODEL_PATH = "/home/bingo/Desktop/poubelle/waste_classifier8.tflite"
+    LABELS_PATH = "label_encoder(6).pkl"
     
     # Paramètres de détection optimisés
-    INPUT_SHAPE = (40, 32)  # (hauteur, largeur)
+    INPUT_SHAPE = (224, 224)  # (hauteur, largeur)
     MIN_AREA = 1500   
     MAX_AREA = 150000 
     STABILIZATION_TIME = 3.0   # 3 secondes de stabilisation
-    CONFIDENCE_THRESHOLD = 50  
+    CONFIDENCE_THRESHOLD = 40  
     
     # Nouveaux paramètres pour la stabilisation
-    MIN_DETECTION_FRAMES = 15  # Minimum de frames consécutives nécessaires
-    STABLE_CONFIDENCE_THRESHOLD = 60  # Confiance minimum pour considérer stable
+    MIN_DETECTION_FRAMES = 10  # Minimum de frames consécutives nécessaires
+    STABLE_CONFIDENCE_THRESHOLD = 40  # Confiance minimum pour considérer stable
     
     # Paramètres de prétraitement avancés
     BLUR_KERNEL = (5, 5)  
@@ -150,6 +150,7 @@ class DetectionSystem:
             if os.path.exists(Config.MODEL_PATH):
                 self.interpreter = tflite.Interpreter(model_path=Config.MODEL_PATH)
                 self.interpreter.allocate_tensors()
+                print("Input details:",self.interpreter.get_input_details())
             else:
                 raise FileNotFoundError(f"Modèle non trouvé: {Config.MODEL_PATH}")
             
@@ -239,9 +240,9 @@ class DetectionSystem:
         """Prédire la classe de la ROI"""
         try:
             resized = cv2.resize(roi, Config.INPUT_SHAPE)
-            gray_resized = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
-            input_data = gray_resized.astype(np.float32) / 255.0
-            input_data = input_data.flatten().reshape(1, -1)
+            input_data = resized.astype(np.float32)
+            input_data = input_data / 127.5 - 1.0
+            input_data = np.expand_dims(input_data, axis=0)
             self.interpreter.set_tensor(input_details[0]['index'], input_data)
             self.interpreter.invoke()
             output_data = self.interpreter.get_tensor(output_details[0]['index'])[0]
@@ -832,12 +833,12 @@ class MainApplication(tk.Tk):
                      bg=Config.COLORS["card"], fg=Config.COLORS["text_primary"]).pack(side="left")
             tk.Label(info_frame, text=f"{count} ({percentage:.1f}%)", font=("Segoe UI", Config.FONT_SIZE_SMALL, "bold"),
                      bg=Config.COLORS["card"], fg=color).pack(side="right")
-            if self.stats["total"] > 0:
-                progress_bg = tk.Frame(cat_frame, bg=Config.COLORS["border"], height=3)
-                progress_bg.pack(fill="x", pady=(2, 0))
-                if count > 0:
-                    progress_fill = tk.Frame(progress_bg, bg=color, height=3)
-                    progress_fill.place(x=0, y=0, relwidth=percentage/100, height=3)
+            #if self.stats["total"] > 0:
+                #progress_bg = tk.Frame(cat_frame, bg=Config.COLORS["border"], height=3)
+                #progress_bg.pack(fill="x", pady=(2, 0))
+                #if count > 0:
+                    #progress_fill = tk.Frame(progress_bg, bg=color, height=3)
+                    #progress_fill.place(x=0, y=0, relwidth=percentage/100, height=3)
 
     def start_systems(self):
         self.detection.start(self)
