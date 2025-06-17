@@ -61,13 +61,13 @@ async function fetchAllData() {
     for (let i = 0; i < LEVEL_VARS.length; i++) {
         try {
             const res = await fetch(
-                `https://stem.ubidots.com/api/v1.6/devices/${DEVICE}/${LEVEL_VARS[i]}/lv`,
+                `https://industrial.api.ubidots.com/api/v1.6/devices/${DEVICE}/${LEVEL_VARS[i]}/lv`,
                 { headers: { "X-Auth-Token": UBIDOTS_TOKEN } }
             );
 
             let value = 0;
             if (res.ok) {
-                const text = await res.text();
+                const text = await res.text(); //car /lv Donne juste la dernière valeur
                 value = parseInt(text);
                 if (isNaN(value)) {
                     value = getRandomLevel();
@@ -90,7 +90,7 @@ async function fetchAllData() {
     for (let i = 0; i < WASTE_VARS.length; i++) {
         try {
             const res = await fetch(
-                `https://stem.ubidots.com/api/v1.6/devices/${DEVICE}/${WASTE_VARS[i]}/lv`,
+                `https://industrial.api.ubidots.com/api/v1.6/devices/${DEVICE}/${WASTE_VARS[i]}/lv`,
                 { headers: { "X-Auth-Token": UBIDOTS_TOKEN } }
             );
 
