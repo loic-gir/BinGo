@@ -28,7 +28,7 @@ float calculerPourcentage(float distance) {
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // Initialisation des capteurs
   for (int i = 0; i < NB_CAPTEURS; i++) {
