@@ -59,7 +59,6 @@ function initStats() {
 
 // Fonction pour récupérer les données depuis ton API Flask
 async function fetchAllData() {
-    let totalWaste = 0;
     isUsingMockData = false;
 
     try {
@@ -93,40 +92,28 @@ async function fetchAllData() {
     updateStatus();
 }
 
-// Récupérer les statistiques depuis l'historique
-async function fetchWasteStats() {
+// Récupérer les statistiques 
+async function fetchStats() {
     try {
-        const res = await fetch(`${NGROK_API_URL}/api/history`, {
+        const res = await fetch(`${NGROK_API_URL}/api/stats`, {
             headers: NGROK_HEADERS
         });
 
         if (res.ok) {
-            const history = await res.json();
-           
-            // Compter les types de déchets depuis l'historique
-            // (Tu devras adapter selon la structure de tes données d'historique)
-            const wasteCounts = {
-                "plastique": Math.floor(Math.random() * 50),
-                "papier_carton": Math.floor(Math.random() * 50),
-                "verre": Math.floor(Math.random() * 50),
-                "metal": Math.floor(Math.random() * 50),
-                "non_recyclable": Math.floor(Math.random() * 50)
-            };
-
-            // Mise à jour de l'affichage des statistiques
-            let totalWaste = 0;
-            WASTE_VARS.forEach((waste, i) => {
-                const count = wasteCounts[waste] || 0;
-                totalWaste += count;
-                updateStatDisplay(i, count);
-            });
-
-            document.getElementById('totalWaste').textContent = `Total déchets: ${totalWaste}`;
+            const stats = await res.json();
+            console.log("Statistiques reçues:", stats);
+            updateStatsDisplay(stats);
+            return stats;
+        } else {
+            console.error("Erreur récupération stats:", res.status);
+            return null;
         }
     } catch (error) {
-        console.error("Erreur récupération statistiques:", error);
+        console.error("Erreur connexion stats:", error);
+        return null;
     }
 }
+
 
 // Fonction de fallback en cas d'erreur
 function useMockData() {
@@ -189,10 +176,37 @@ function updateBinDisplay(index, value) {
     }
 }
 
-function updateStatDisplay(index, count) {
-    const statValue = document.getElementById(`stat-value-${index}`);
-    if (statValue) statValue.textContent = count;
+function updateStatsDisplay(stats) {
+    // Mettre à jour le total
+    const totalElement = document.getElementById('totalWaste');
+    if (totalElement) {
+        totalElement.textContent = `Total déchets triés: ${stats.total}`;
+    }
+
+    // Mettre à jour chaque catégorie
+    const categoryMapping = {
+        "papier": 0,
+        "plastique": 1,
+        "verre": 2,
+        "metal": 3,
+        "non_recyclable": 4
+    };
+
+    Object.keys(categoryMapping).forEach(category => {
+        const index = categoryMapping[category];
+        const statElement = document.getElementById(`stat-value-${index}`);
+        if (statElement) {
+            statElement.textContent = stats[category] || 0;
+        }
+    });
+
+    // Afficher la dernière détection si disponible
+    if (stats.derniere_detection) {
+        const lastDetection = stats.derniere_detection;
+        console.log(`Dernière détection: ${lastDetection.type} (${lastDetection.confidence}%) à ${lastDetection.timestamp}`);
+    }
 }
+
 
 function updateStatus() {
     const now = new Date();
@@ -209,40 +223,6 @@ function updateStatus() {
     }
 }
 
-// === NOTIFICATIONS GOOGLE SHEETS ===
-async function fetchNotifications() {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${API_KEY}`;
-    const notifContent = document.getElementById("notifContent");
-
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-        const rows = data.values;
-
-        notifContent.innerHTML = rows.length > 1
-            ? rows.slice(1).reverse().slice(0, 10).map(row => `
-                <p>📩 ${row[0]} a atteint ${row[1]}% à ${row[2]}</p>
-            `).join('')
-            : "<p>Aucune notification trouvée</p>";
-
-    } catch (error) {
-        console.error("Erreur notifications :", error);
-        notifContent.innerHTML = "<p>Erreur lors de la récupération des notifications.</p>";
-    }
-}
-
-function displayLog() {
-    document.getElementById("notifLog").style.display = "block";
-    document.getElementById("shadow").style.display = "block";
-
-    fetchNotifications(); // Rafraîchit les notifications à chaque ouverture
-}
-
-function hideLog() {
-    document.getElementById("notifLog").style.display = "none";
-    document.getElementById("shadow").style.display = "none";
-}
-
 // Initialisation au chargement
 document.addEventListener('DOMContentLoaded', async () => {
     initDisplay();
@@ -256,6 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     fetchAllData();
+    fetchStats();
 
     // Mise à jour toutes les 5 secondes
     setInterval(fetchAllData, 5000);
