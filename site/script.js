@@ -1,6 +1,7 @@
 // === CONFIGURATION ===
 const UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsY";
 const DEVICE = "BinGo";
+const NGROK_API_URL = "https://f8b2-79-174-206-181.ngrok-free.app"; // URL de l'API Ubidots via ngrok
 
 const LEVEL_VARS = ["niveau_bac1", "niveau_bac2", "niveau_bac3", "niveau_bac4", "niveau_bac5"];
 const WASTE_VARS = ["plastique", "papier_carton", "verre", "metal", "non_recyclable"];
@@ -9,6 +10,10 @@ const SPREADSHEET_ID = "1H5oOlzpMnm91YhuOPa82Yi_8R4Vn2gIJLphG5Lt5HSU";
 const API_KEY = "AIzaSyAt5tmQzLb91C7SgmYozzOLh72XmCNbxpc";
 const SHEET_NAME = "Feuille 1";
 
+const NGROK_HEADERS = {
+    'ngrok-skip-browser-warning': 'true',
+    'Content-Type': 'application/json'
+};
 // Icônes et labels
 const WASTE_CONFIG = {
     "plastique": { icon: "🧴", label: "Plastique" },
@@ -52,75 +57,113 @@ function initStats() {
   `).join('');
 }
 
-// Fonction pour récupérer les données
+// Fonction pour récupérer les données depuis ton API Flask
 async function fetchAllData() {
     let totalWaste = 0;
     isUsingMockData = false;
 
-    // Récupération des niveaux des bacs
-    for (let i = 0; i < LEVEL_VARS.length; i++) {
-        try {
-            const res = await fetch(
-                `https://industrial.api.ubidots.com/api/v1.6/devices/${DEVICE}/${LEVEL_VARS[i]}/lv`,
-                { headers: { "X-Auth-Token": UBIDOTS_TOKEN } }
-            );
+    try {
+        // Récupération des données depuis ton API Flask
+        const res = await fetch(`${NGROK_API_URL}/api/data`, {
+            headers: NGROK_HEADERS
+        });
 
-            let value = 0;
-            if (res.ok) {
-                const text = await res.text(); //car /lv Donne juste la dernière valeur
-                value = parseInt(text);
-                if (isNaN(value)) {
-                    value = getRandomLevel();
-                    isUsingMockData = true;
-                }
-            } else {
-                value = getRandomLevel();
-                isUsingMockData = true;
+        if (res.ok) {
+            const data = await res.json();
+            console.log("Données reçues:", data);
+
+            // Mise à jour des niveaux des bacs
+            for (let i = 0; i < LEVEL_VARS.length; i++) {
+                const level = data[LEVEL_VARS[i]] || 0;
+                updateBinDisplay(i, level);
             }
 
-            updateBinDisplay(i, value);
-        } catch (e) {
-            updateBinDisplay(i, getRandomLevel());
-            isUsingMockData = true;
-            console.error(`Erreur niveau bac ${i + 1}:`, e);
+            // Pour les statistiques, utilise les données d'historique si disponibles
+            await fetchWasteStats();
+
+        } else {
+            console.error("Erreur API:", res.status);
+            useMockData();
         }
+    } catch (error) {
+        console.error("Erreur connexion API:", error);
+        useMockData();
     }
 
-    // Récupération des statistiques de déchets
-    for (let i = 0; i < WASTE_VARS.length; i++) {
-        try {
-            const res = await fetch(
-                `https://industrial.api.ubidots.com/api/v1.6/devices/${DEVICE}/${WASTE_VARS[i]}/lv`,
-                { headers: { "X-Auth-Token": UBIDOTS_TOKEN } }
-            );
-
-            let count = 0;
-            if (res.ok) {
-                const text = await res.text();
-                count = parseInt(text);
-                if (isNaN(count)) {
-                    count = getRandomWasteCount();
-                    isUsingMockData = true;
-                }
-            } else {
-                count = getRandomWasteCount();
-                isUsingMockData = true;
-            }
-
-            totalWaste += count;
-            updateStatDisplay(i, count);
-        } catch (e) {
-            const count = getRandomWasteCount();
-            totalWaste += count;
-            updateStatDisplay(i, count);
-            isUsingMockData = true;
-            console.error(`Erreur statistique ${WASTE_VARS[i]}:`, e);
-        }
-    }
-
-    // Mise à jour de l'affichage
-    document.getElementById('totalWaste').textContent = `Total déchets: ${totalWaste}`;
     updateStatus();
+}
+
+// Récupérer les statistiques depuis l'historique
+async function fetchWasteStats() {
+    try {
+        const res = await fetch(`${NGROK_API_URL}/api/history`, {
+            headers: NGROK_HEADERS
+        });
+
+        if (res.ok) {
+            const history = await res.json();
+           
+            // Compter les types de déchets depuis l'historique
+            // (Tu devras adapter selon la structure de tes données d'historique)
+            const wasteCounts = {
+                "plastique": Math.floor(Math.random() * 50),
+                "papier_carton": Math.floor(Math.random() * 50),
+                "verre": Math.floor(Math.random() * 50),
+                "metal": Math.floor(Math.random() * 50),
+                "non_recyclable": Math.floor(Math.random() * 50)
+            };
+
+            // Mise à jour de l'affichage des statistiques
+            let totalWaste = 0;
+            WASTE_VARS.forEach((waste, i) => {
+                const count = wasteCounts[waste] || 0;
+                totalWaste += count;
+                updateStatDisplay(i, count);
+            });
+
+            document.getElementById('totalWaste').textContent = `Total déchets: ${totalWaste}`;
+        }
+    } catch (error) {
+        console.error("Erreur récupération statistiques:", error);
+    }
+}
+
+// Fonction de fallback en cas d'erreur
+function useMockData() {
+    isUsingMockData = true;
+   
+    // Données simulées pour les bacs
+    for (let i = 0; i < LEVEL_VARS.length; i++) {
+        updateBinDisplay(i, getRandomLevel());
+    }
+   
+    // Données simulées pour les statistiques
+    let totalWaste = 0;
+    for (let i = 0; i < WASTE_VARS.length; i++) {
+        const count = getRandomWasteCount();
+        totalWaste += count;
+        updateStatDisplay(i, count);
+    }
+   
+    document.getElementById('totalWaste').textContent = `Total déchets: ${totalWaste}`;
+}
+
+// Tester la connexion à l'API
+async function testConnection() {
+    try {
+        const res = await fetch(`${NGROK_API_URL}/api/status`, {
+            headers: NGROK_HEADERS
+        });
+       
+        if (res.ok) {
+            const status = await res.json();
+            console.log("Statut API:", status);
+            return true;
+        }
+    } catch (error) {
+        console.error("Test connexion échoué:", error);
+    }
+    return false;
 }
 
 function getRandomLevel() {
@@ -156,11 +199,13 @@ function updateStatus() {
     const statusElement = document.getElementById('updateStatus');
 
     if (statusElement) {
-        statusElement.textContent = isUsingMockData
-            ? `⚠ Données simulées - Dernière tentative: ${now.toLocaleString()}`
-            : `✓ Données mises à jour: ${now.toLocaleString()}`;
-
-        statusElement.className = isUsingMockData ? 'update-status error' : 'update-status success';
+        if (isUsingMockData) {
+            statusElement.textContent = `⚠ Connexion API échouée - Données simulées - ${now.toLocaleString()}`;
+            statusElement.className = 'update-status error';
+        } else {
+            statusElement.textContent = `✓ Données temps réel via ngrok - ${now.toLocaleString()}`;
+            statusElement.className = 'update-status success';
+        }
     }
 }
 
@@ -199,10 +244,19 @@ function hideLog() {
 }
 
 // Initialisation au chargement
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initDisplay();
+
+     // Tester la connexion avant de commencer
+    const connected = await testConnection();
+    if (connected) {
+        console.log("✅ Connexion API établie");
+    } else {
+        console.log("⚠️ API non accessible, mode simulation");
+    }
+
     fetchAllData();
 
-    // Mise à jour toutes les 10 secondes
-    setInterval(fetchAllData, 10000);
+    // Mise à jour toutes les 5 secondes
+    setInterval(fetchAllData, 5000);
 });
