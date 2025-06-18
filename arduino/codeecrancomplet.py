@@ -59,11 +59,10 @@ class Config:
     FONT_SIZE_SMALL = 8   # Réduit
     EMOJI_SIZE = 24       # Réduit
     
-    # Configuration Arduino
-    ARDUINO_PORT = "/dev/ttyUSB0"  # Adapte selon ton port
+    # Configuration Arduino et Ubidots
+    ARDUINO_PORT = "/dev/ttyACM0"  # Adapte selon ton port
     ARDUINO_BAUD = 115200
-    
-    UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsY"
+    UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsYbc"  # Mettez votre vrai token
     DEVICE_NAME = "BinGo"
     
     # Palette moderne avec dégradés
@@ -98,32 +97,78 @@ current_data = {"niveau_bac1": 0, "niveau_bac2": 0, "niveau_bac3": 0, "niveau_ba
 history_data = []
 
 def init_arduino():
-    """Initialiser la connexion Arduino"""
+    """Initialiser la connexion Arduino avec détection automatique du port"""
     global arduino_serial
-    try:
-        arduino_serial = serial.Serial(Config.ARDUINO_PORT, Config.ARDUINO_BAUD, timeout=2)
-        time.sleep(3)  # Attendre que l'Arduino se réinitialise
-        print(f"✅ Arduino connecté sur {Config.ARDUINO_PORT} à {Config.ARDUINO_BAUD} bauds")
-        return True
-    except serial.SerialException as e:
-        print(f"❌ Erreur connexion Arduino: {e}")
-        arduino_serial = None
-        return False
+    
+    # Ports possibles à tester dans l'ordre
+    possible_ports = [
+        "/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2",
+        "/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyACM2",
+        "/dev/ttyS0", "/dev/ttyS1"
+    ]
+    
+    for port in possible_ports:
+        try:
+            print(f"🔍 Test connexion Arduino sur {port}...")
+            arduino_serial = serial.Serial(port, Config.ARDUINO_BAUD, timeout=2)
+            time.sleep(3)  # Attendre que l'Arduino se réinitialise
+            
+            # Test de communication
+            arduino_serial.write(b"test\n")
+            time.sleep(1)
+            
+            print(f"✅ Arduino connecté sur {port}")
+            return True
+            
+        except (serial.SerialException, FileNotFoundError, PermissionError) as e:
+            print(f"   ❌ Échec {port}: {e}")
+            if arduino_serial:
+                try:
+                    arduino_serial.close()
+                except:
+                    pass
+                arduino_serial = None
+            continue
+    
+    print("❌ Aucun Arduino trouvé sur les ports testés")
+    arduino_serial = None
+    return False
 
 def send_arduino_command(command):
-    """Envoyer une commande à l'Arduino"""
+    """Envoyer une commande à l'Arduino avec gestion d'erreurs"""
     global arduino_serial
-    if arduino_serial and arduino_serial.is_open:
-        try:
-            command_with_newline = command + '\n'
-            arduino_serial.write(command_with_newline.encode('utf-8'))
-            print(f"📤 Commande Arduino: {command}")
-            return True
-        except Exception as e:
-            print(f"❌ Erreur envoi commande: {e}")
+    
+    if not arduino_serial:
+        print("⚠️ Arduino non connecté - Tentative de reconnexion...")
+        if not init_arduino():
             return False
-    else:
-        print("⚠️ Arduino non connecté")
+    
+    try:
+        # Vérifier que la connexion est toujours active
+        if not arduino_serial.is_open:
+            print("⚠️ Connexion Arduino fermée - Reconnexion...")
+            if not init_arduino():
+                return False
+        
+        # Envoyer la commande
+        command_with_newline = command + '\n'
+        arduino_serial.write(command_with_newline.encode('utf-8'))
+        arduino_serial.flush()  # Forcer l'envoi
+        print(f"📤 Commande Arduino envoyée: {command}")
+        return True
+        
+    except (serial.SerialException, OSError) as e:
+        print(f"❌ Erreur envoi commande Arduino: {e}")
+        # Tentative de reconnexion
+        try:
+            arduino_serial.close()
+        except:
+            pass
+        arduino_serial = None
+        
+        # Essayer de reconnecter
+        if init_arduino():
+            return send_arduino_command(command)
         return False
 
 def envoyer_donnees(device, variables):
@@ -131,58 +176,93 @@ def envoyer_donnees(device, variables):
     try:
         url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{device}/"
         headers = {"X-Auth-Token": Config.UBIDOTS_TOKEN, "Content-Type": "application/json"}
-        response = requests.post(url, json=variables, headers=headers)
+        response = requests.post(url, json=variables, headers=headers, timeout=10)
         print(f"📊 Ubidots: {response.status_code} - {variables}")
     except Exception as e:
         print(f"❌ Erreur Ubidots: {e}")
 
 def lire_arduino():
-    """Lire les données de l'Arduino"""
+    """Lire les données de l'Arduino avec gestion d'erreurs"""
     global arduino_serial, current_data, history_data
-    if arduino_serial and arduino_serial.is_open:
-        try:
-            if arduino_serial.in_waiting > 0:
-                ligne = arduino_serial.readline().decode('utf-8').strip()
-                print(f"📥 Arduino: {ligne}")
-                
-                if ligne.startswith("forSite"):
-                    try:
-                        # Enlève le préfixe et garde seulement les valeurs
-                        valeurs_str = ligne.replace("forSite", "").strip()
-                        valeurs = [float(val) for val in valeurs_str.split(",")]
+    
+    if not arduino_serial:
+        return None
+    
+    try:
+        if not arduino_serial.is_open:
+            return None
+            
+        if arduino_serial.in_waiting > 0:
+            ligne = arduino_serial.readline().decode('utf-8').strip()
+            print(f"📥 Arduino: {ligne}")
+            
+            if ligne.startswith("forSite"):
+                try:
+                    # Enlève le préfixe et garde seulement les valeurs
+                    valeurs_str = ligne.replace("forSite", "").strip()
+                    valeurs = [float(val) for val in valeurs_str.split(",")]
+                    
+                    if len(valeurs) == 5:
+                        ubidots_data = {
+                            "niveau_bac1": round(valeurs[0], 0),
+                            "niveau_bac2": round(valeurs[1], 0),
+                            "niveau_bac3": round(valeurs[2], 0),
+                            "niveau_bac4": round(valeurs[3], 0),
+                            "niveau_bac5": round(valeurs[4], 0),
+                        }
+                        data= dict(ubidots_data)
+                        data["timestamp"]= time.strftime("%Y-%m-%d %H:%M:%S")
                         
-                        if len(valeurs) == 5:
-                            data = {
-                                "niveau_bac1": round(valeurs[0], 0),
-                                "niveau_bac2": round(valeurs[1], 0),
-                                "niveau_bac3": round(valeurs[2], 0),
-                                "niveau_bac4": round(valeurs[3], 0),
-                                "niveau_bac5": round(valeurs[4], 0),
-                                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                            }
-                            
-                            # Mettre à jour les données
-                            current_data = data
-                            history_data.append(data)
-                            if len(history_data) > 50:
-                                history_data.pop(0)
-                            
-                            # Envoyer à Ubidots
-                            envoyer_donnees(Config.DEVICE_NAME, data)
-                            
-                            return data
-                    except ValueError:
-                        print("❌ Erreur parsing données capteurs")
-                return ligne
-        except Exception as e:
-            print(f"❌ Erreur lecture Arduino: {e}")
+                        # Mettre à jour les données
+                        current_data = data
+                        history_data.append(data)
+                        if len(history_data) > 50:
+                            history_data.pop(0)
+                        
+                        # Envoyer à Ubidots
+                        envoyer_donnees(Config.DEVICE_NAME, ubidots_data)
+                        
+                        return data
+                except ValueError:
+                    print("❌ Erreur parsing données capteurs")
+            return ligne
+            
+    except (serial.SerialException, UnicodeDecodeError, OSError) as e:
+        print(f"❌ Erreur lecture Arduino: {e}")
+        # Fermer la connexion défaillante
+        try:
+            arduino_serial.close()
+        except:
+            pass
+        arduino_serial = None
+    
     return None
 
 def arduino_monitor_thread():
     """Thread de surveillance Arduino en arrière-plan"""
+    reconnect_attempts = 0
+    max_reconnect_attempts = 5
+    
     while True:
-        lire_arduino()
-        time.sleep(0.1)
+        try:
+            if arduino_serial is None:
+                if reconnect_attempts < max_reconnect_attempts:
+                    print(f"🔄 Tentative de reconnexion Arduino ({reconnect_attempts + 1}/{max_reconnect_attempts})")
+                    if init_arduino():
+                        reconnect_attempts = 0
+                    else:
+                        reconnect_attempts += 1
+                        time.sleep(10)  # Attendre avant de réessayer
+                else:
+                    time.sleep(30)  # Attendre plus longtemps après plusieurs échecs
+                    reconnect_attempts = 0
+            else:
+                lire_arduino()
+                time.sleep(0.1)
+                
+        except Exception as e:
+            print(f"❌ Erreur thread Arduino: {e}")
+            time.sleep(1)
 
 # === SERVEUR WEB FLASK ===
 app = Flask(__name__)
@@ -192,7 +272,21 @@ CORS(app)  # Permet les requêtes depuis votre site Netlify
 @app.route('/api/data')
 def get_data():
     """API pour récupérer les données des bacs"""
-    global current_data
+    global current_data, arduino_serial
+    
+    # Si Arduino non connecté, simuler des données
+    if arduino_serial is None:
+        import random
+        current_data = {
+            "niveau_bac1": random.randint(5, 25),
+            "niveau_bac2": random.randint(5, 25), 
+            "niveau_bac3": random.randint(5, 25),
+            "niveau_bac4": random.randint(5, 25),
+            "niveau_bac5": random.randint(5, 25),
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "Mode simulation - Arduino non connecté"
+        }
+    
     return jsonify(current_data)
 
 @app.route('/api/history')
@@ -200,6 +294,15 @@ def get_history():
     """API pour récupérer l'historique"""
     global history_data
     return jsonify(history_data)
+
+@app.route('/api/status')
+def get_status():
+    """API pour vérifier le statut du système"""
+    return jsonify({
+        "arduino_connected": arduino_serial is not None,
+        "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "flask_running": True
+    })
 
 @app.route('/')
 def index():
@@ -211,7 +314,7 @@ def index():
     })
 
 def start_flask_server():
-    """Démarrer le serveur Flask en arrière-plan"""
+    """Démarrer le serveur Flask accessible depuis l'extérieur"""
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
 # === Système de détection ===
@@ -958,10 +1061,13 @@ class MainApplication(tk.Tk):
             info_frame = tk.Frame(cat_frame, bg=Config.COLORS["card"])
             info_frame.pack(fill="x")
             # Charger l'image
-            icon_image = Image.open(icon_path).resize((20, 20), Image.Resampling.LANCZOS)
-            icon_tk = ImageTk.PhotoImage(icon_image)
-            self.icon_refs.append(icon_tk)  # Garder une référence
-            tk.Label(info_frame, image=icon_tk, bg=Config.COLORS["card"]).pack(side="left", padx=(0, 5))
+            try:
+                icon_image = Image.open(icon_path).resize((20, 20), Image.Resampling.LANCZOS)
+                icon_tk = ImageTk.PhotoImage(icon_image)
+                self.icon_refs.append(icon_tk)  # Garder une référence
+                tk.Label(info_frame, image=icon_tk, bg=Config.COLORS["card"]).pack(side="left", padx=(0, 5))
+            except Exception as e:
+                print(f"Erreur chargement icône {icon_path}: {e}")
             tk.Label(info_frame, text=name, font=("Segoe UI", Config.FONT_SIZE_SMALL),
                      bg=Config.COLORS["card"], fg=Config.COLORS["text_primary"]).pack(side="left")
             tk.Label(info_frame, text=f"{count} ({percentage:.1f}%)", font=("Segoe UI", Config.FONT_SIZE_SMALL, "bold"),
@@ -976,15 +1082,14 @@ class MainApplication(tk.Tk):
             arduino_thread.start()
         else:
             print("⚠️ Arduino non disponible - Mode simulation")
-
-          # NOUVEAU : Démarrer le serveur Flask
+        
+        # NOUVEAU : Démarrer le serveur Flask
         flask_thread = threading.Thread(target=start_flask_server, daemon=True)
         flask_thread.start()
         print("🌐 Serveur Flask démarré sur http://localhost:5000")
-    
         
         self.detection.start(self)
-        self.update_status("Détection active")
+        self.update_status("Détection active - Serveur web actif")
         self.check_detections()
 
     def check_detections(self):
@@ -1021,8 +1126,10 @@ class MainApplication(tk.Tk):
         
         if send_arduino_command(arduino_command):
             print(f"🤖 Commande Arduino envoyée: {arduino_command}")
+            self.update_status(f"✅ CONFIRMÉ: {label} - Arduino activé")
         else:
             print("⚠️ Échec envoi commande Arduino")
+            self.update_status(f"⚠️ CONFIRMÉ: {label} - Arduino non disponible")
         
         self.update_stats(label)
         self.create_result_display(label, confidence)
@@ -1031,7 +1138,6 @@ class MainApplication(tk.Tk):
             self.after_cancel(self.result_timer)
         self.result_timer = self.after(2000, self.return_to_waiting)
         print("Objet classifié")
-        self.update_status(f"✅ CONFIRMÉ: {label} - Arduino activé")
         self.start_countdown_status(label)
 
     def start_countdown_status(self, label):
@@ -1046,7 +1152,8 @@ class MainApplication(tk.Tk):
     def handle_no_object(self):
         self.return_to_waiting()
         self.update_status("🔍 En attente d'un objet")
-
+        
+        
     def return_to_waiting(self):
         if self.result_timer:
             self.after_cancel(self.result_timer)
@@ -1065,6 +1172,8 @@ class MainApplication(tk.Tk):
         }
         key = label_to_stats.get(label, "non_recyclable")
         self.stats[key] += 1
+        # Envoyer à Ubidots
+        envoyer_donnees(Config.DEVICE_NAME, self.stats)
         self.update_stats_display()
 
     def reset_stats(self):
@@ -1089,7 +1198,10 @@ class MainApplication(tk.Tk):
         print("Fermeture de l'application...")
         global arduino_serial
         if arduino_serial:
-            arduino_serial.close()
+            try:
+                arduino_serial.close()
+            except:
+                pass
         self.detection.stop()
         self.destroy()
 
@@ -1116,3 +1228,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
