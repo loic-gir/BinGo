@@ -17,18 +17,19 @@ const int echoPins[NB_CAPTEURS] = { 7, 8, 9, 10, 11 };
 // Variables d'état
 bool sequenceComplete = false;
 const int DISTANCE_PLEIN = 10;  // Seuil en cm pour considérer le bac plein
-const int HAUTEUR_BAC_CM = 100;
+// const int HAUTEUR_BAC_CM = 100;
 
-float pourcentages[NB_bac];  // Pour stocker les % de remplissage
+// float pourcentages[NB_CAPTEURS];  // Pour stocker les % de remplissage
 
-float calculerPourcentage(float distance) {
-  if (distance <= DISTANCE_PLEIN) return 100.0;
-  if (distance >= HAUTEUR_BAC_CM) return 0.0;
-  return ((HAUTEUR_BAC_CM - distance) / (HAUTEUR_BAC_CM - DISTANCE_PLEIN)) * 100.0;
-}
+// float calculerPourcentage(float distance) {
+//   if (distance <= DISTANCE_PLEIN) return 100.0;
+//   if (distance >= HAUTEUR_BAC_CM) return 0.0;
+//   return ((HAUTEUR_BAC_CM - distance) / (HAUTEUR_BAC_CM - DISTANCE_PLEIN)) * 100.0;
+// }
 
 void setup() {
-  Serial.begin(115200);
+  // Serial.begin(115200);
+  Serial.begin(9600);
 
   // Initialisation des capteurs
   for (int i = 0; i < NB_CAPTEURS; i++) {
@@ -88,7 +89,7 @@ bool checkNiveauxPoubelles() {
     Serial.print(i + 1);
     Serial.print(": ");
 
-    pourcentages[i] = calculerPourcentage(distance);
+    // pourcentages[i] = calculerPourcentage(distance);
 
     if (distance < DISTANCE_PLEIN) {
       Serial.println("PLEIN");
@@ -100,12 +101,12 @@ bool checkNiveauxPoubelles() {
     delay(100);  // Pause entre les mesures
   }
 
-  Serial.print("forSite");  // Ajout du mot fixe pour eviter les infos inutils
-  for (int i = 0; i < NB_CAPTEURS; i++) {
-    Serial.print(pourcentages[i], 0);  // 0 chiffre après virgule
-    if (i < NB_bac - 1) Serial.print(",");
-  }
-  Serial.println();
+  // Serial.print("forSite");  // Ajout du mot fixe pour eviter les infos inutils
+  // for (int i = 0; i < NB_CAPTEURS; i++) {
+  //   Serial.print(pourcentages[i], 0);  // 0 chiffre après virgule
+  //   if (i < NB_CAPTEURS - 1) Serial.print(",");
+  // }
+  // Serial.println();
 
   return tousPleins;
 }
