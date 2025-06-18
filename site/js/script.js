@@ -77,8 +77,8 @@ async function fetchAllData() {
                 updateBinDisplay(i, level);
             }
 
-            // Pour les statistiques, utilise les données d'historique si disponibles
-            await fetchWasteStats();
+            // Récupération des statistiques
+            await fetchStats();
 
         } else {
             console.error("Erreur API:", res.status);
@@ -118,12 +118,12 @@ async function fetchStats() {
 // Fonction de fallback en cas d'erreur
 function useMockData() {
     isUsingMockData = true;
-   
+
     // Données simulées pour les bacs
     for (let i = 0; i < LEVEL_VARS.length; i++) {
         updateBinDisplay(i, getRandomLevel());
     }
-   
+
     // Données simulées pour les statistiques
     let totalWaste = 0;
     for (let i = 0; i < WASTE_VARS.length; i++) {
@@ -131,7 +131,7 @@ function useMockData() {
         totalWaste += count;
         updateStatDisplay(i, count);
     }
-   
+
     document.getElementById('totalWaste').textContent = `Total déchets: ${totalWaste}`;
 }
 
@@ -141,7 +141,7 @@ async function testConnection() {
         const res = await fetch(`${NGROK_API_URL}/api/status`, {
             headers: NGROK_HEADERS
         });
-       
+
         if (res.ok) {
             const status = await res.json();
             console.log("Statut API:", status);
@@ -207,6 +207,10 @@ function updateStatsDisplay(stats) {
     }
 }
 
+function updateStatDisplay(index, count) {
+    const statValue = document.getElementById(`stat-value-${index}`);
+    if (statValue) statValue.textContent = count;
+}
 
 function updateStatus() {
     const now = new Date();
@@ -227,7 +231,7 @@ function updateStatus() {
 document.addEventListener('DOMContentLoaded', async () => {
     initDisplay();
 
-     // Tester la connexion avant de commencer
+    // Tester la connexion avant de commencer
     const connected = await testConnection();
     if (connected) {
         console.log("✅ Connexion API établie");
