@@ -96,6 +96,18 @@ arduino_serial = None
 current_data = {"niveau_bac1": 0, "niveau_bac2": 0, "niveau_bac3": 0, "niveau_bac4": 0, "niveau_bac5": 0}
 history_data = []
 
+# Variables globales pour les statistiques
+stats_data = {
+    "total": 0,
+    "papier": 0,
+    "plastique": 0,
+    "metal": 0,
+    "verre": 0,
+    "non_recyclable": 0,
+    "derniere_detection": None,
+    "timestamp_stats": time.strftime("%Y-%m-%d %H:%M:%S")
+}
+
 def init_arduino():
     """Initialiser la connexion Arduino avec détection automatique du port"""
     global arduino_serial
@@ -312,6 +324,28 @@ def index():
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "data": current_data
     })
+
+@app.route('/api/stats')
+def get_stats():
+    """API pour récupérer les statistiques de tri"""
+    global stats_data
+    return jsonify(stats_data)
+
+@app.route('/api/stats/reset', methods=['POST'])
+def reset_stats():
+    """API pour remettre à zéro les statistiques"""
+    global stats_data
+    stats_data = {
+        "total": 0,
+        "papier": 0,
+        "plastique": 0,
+        "metal": 0,
+        "verre": 0,
+        "non_recyclable": 0,
+        "derniere_detection": None,
+        "timestamp_stats": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    return jsonify({"status": "success", "message": "Statistiques remises à zéro"})
 
 def start_flask_server():
     """Démarrer le serveur Flask accessible depuis l'extérieur"""
@@ -1111,9 +1145,33 @@ class MainApplication(tk.Tk):
             print(f"Erreur détections: {e}")
         self.after(100, self.check_detections)
 
+
     def handle_detection(self, label, confidence):
+        global stats_data
+    
         print(f"DÉTECTION CONFIRMÉE après 3s: {label} ({confidence:.1f}%)")
-        
+    
+        # METTRE À JOUR LES STATISTIQUES GLOBALES
+        stats_data["total"] += 1
+        stats_data["timestamp_stats"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        stats_data["derniere_detection"] = {
+            "type": label,
+            "confidence": confidence,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+    
+        # Mapping des labels vers les statistiques
+        label_to_stats = {
+            "cardboard_paper": "papier",
+            "plastic": "plastique", 
+            "metal": "metal",
+            "glass": "verre",
+            "trash": "non_recyclable"
+        }
+    
+        stat_key = label_to_stats.get(label, "non_recyclable")
+        stats_data[stat_key] += 1
+    
         # ENVOYER LA COMMANDE À L'ARDUINO
         label_mapping = {
             "cardboard_paper": "carton",
@@ -1123,14 +1181,14 @@ class MainApplication(tk.Tk):
             "trash": "non recyclable"
         }
         arduino_command = label_mapping.get(label, "non recyclable")
-        
+    
         if send_arduino_command(arduino_command):
             print(f"🤖 Commande Arduino envoyée: {arduino_command}")
             self.update_status(f"✅ CONFIRMÉ: {label} - Arduino activé")
         else:
             print("⚠️ Échec envoi commande Arduino")
             self.update_status(f"⚠️ CONFIRMÉ: {label} - Arduino non disponible")
-        
+    
         self.update_stats(label)
         self.create_result_display(label, confidence)
         self.current_result = (label, confidence)
@@ -1139,6 +1197,7 @@ class MainApplication(tk.Tk):
         self.result_timer = self.after(2000, self.return_to_waiting)
         print("Objet classifié")
         self.start_countdown_status(label)
+    
 
     def start_countdown_status(self, label):
         def countdown(seconds_left):
@@ -1228,4 +1287,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
