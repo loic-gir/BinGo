@@ -1,5 +1,5 @@
 body {
-    background: url('bg.jpg') no-repeat center center fixed;
+    background: url("/site/assets/bg.jpg") no-repeat center center fixed;
     background-size: cover;
     width: 100%;
     font-family: DejaVu Sans Mono, monospace;

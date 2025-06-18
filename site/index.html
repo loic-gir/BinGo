@@ -5,28 +5,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BinGo - Suivi des Bacs</title>
-  <link rel="stylesheet" type="text/css" href="style.css" />
-  <link rel="stylesheet" type="text/css" href="styleIndex.css" />
-  <script src="script.js"></script>
+  <link rel="stylesheet" type="text/css" href="css/style.css" />
+  <link rel="stylesheet" type="text/css" href="css/styleIndex.css" />
+  <script src="js/script.js"></script>
 </head>
 
 <body>
-  <header>
-    <button class="header-btn" onclick="displayLog()">🔔</button>
-    <div class="header-center">
-      <a href="home.html"><img src="logo.png" alt="Logo" /></a>
-    </div>
-    <div style="width: 40px;"></div>
+  <header class="header-center">
+    <a href="home.html"><img src="assets/logo.png" alt="Logo" /></a>
   </header>
-
-  <div class="notif-log" id="notifLog">
-    <h2>Historique des notifications envoyées</h2>
-    <div id="notifContent">
-      <p>Chargement des notifications...</p>
-    </div>
-  </div>
-
-  <div class="shadow" id="shadow" onclick="hideLog()"></div>
 
   <div class="container">
     <div class="dashboard-grid">

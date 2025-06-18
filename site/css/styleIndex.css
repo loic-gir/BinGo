@@ -1,5 +1,3 @@
-
-
 .container {
     padding: 20px;
     max-width: 1400px;
@@ -100,49 +98,6 @@
 .stat-value {
     font-weight: bold;
     font-size: 1.1rem;
-}
-
-.notif-log {
-    display: none;
-    position: absolute;
-    background-color: white;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    padding: 20px 10px 20px 20px;
-    max-height: 100vh;
-    z-index: 11;
-    position: fixed;
-    overflow-y: scroll;
-    scrollbar-width: thin;
-    scrollbar-color: #cccccc00 #f0f3f500;
-    scroll-behavior: smooth;
-}
-
-.notif-log h2 {
-    text-align: center;
-    color: #333;
-    margin-top: 0;
-    border-bottom: 1px solid #f0f3f5;
-    padding-bottom: 5px;
-}
-
-#notifContent p {
-    color: #555;
-    line-height: 1.6;
-    padding: 20px;
-    border-radius: 8px;
-    background: #f0f3f5;
-}
-
-.shadow {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(3px);
-    z-index: 10;
 }
 
 .update-status {
