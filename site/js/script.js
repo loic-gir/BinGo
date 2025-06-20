@@ -1,19 +1,14 @@
 // === CONFIGURATION ===
-const UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsY";
-const DEVICE = "BinGo";
 const NGROK_API_URL = "https://af6a-79-174-206-181.ngrok-free.app"; // URL de l'API Flask via ngrok
-
-const LEVEL_VARS = ["niveau_bac1", "niveau_bac2", "niveau_bac3", "niveau_bac4", "niveau_bac5"];
-const WASTE_VARS = ["plastique", "papier_carton", "verre", "metal", "non_recyclable"];
-
-const SPREADSHEET_ID = "1H5oOlzpMnm91YhuOPa82Yi_8R4Vn2gIJLphG5Lt5HSU";
-const API_KEY = "AIzaSyAt5tmQzLb91C7SgmYozzOLh72XmCNbxpc";
-const SHEET_NAME = "Feuille 1";
 
 const NGROK_HEADERS = {
     'ngrok-skip-browser-warning': 'true',
     'Content-Type': 'application/json'
 };
+
+const LEVEL_VARS = ["niveau_bac1", "niveau_bac2", "niveau_bac3", "niveau_bac4", "niveau_bac5"];
+const WASTE_VARS = ["plastique", "papier_carton", "verre", "metal", "non_recyclable"];
+
 
 // Icônes et labels
 const WASTE_CONFIG = {
@@ -27,11 +22,132 @@ const WASTE_CONFIG = {
 // Variables globales
 let isUsingMockData = false;
 let updateInterval;
+// Variables d'état admin
+let isAdmin = false;
+let isPublic = false;
+
+// Configuration Supabase
+const supabaseCli = supabase.createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
+// Fonctions d'administration
+async function showAdminLogin() {
+    if (isAdmin) {
+        showAdminPanel();
+    }
+    else {
+        document.getElementById('adminLogin').style.display = 'block';
+        document.getElementById('shadow').style.display = 'block';
+    }
+}
+
+function hideAdminLogin() {
+    document.getElementById('adminLogin').style.display = 'none';
+    document.getElementById('shadow').style.display = 'none';
+}
+
+function showAdminPanel() {
+    document.getElementById('adminPanel').style.display = 'block';
+    document.getElementById('shadow').style.display = 'block';
+}
+
+function hideAdminPanel() {
+    document.getElementById('adminPanel').style.display = 'none';
+    document.getElementById('shadow').style.display = 'none';
+}
+
+async function loginAdmin() {
+    const id = document.getElementById('adminId').value.trim();;
+    const password = document.getElementById('adminPassword').value.trim();;
+
+    try {
+        const { data, error } = await supabaseCli
+            .from('admins')
+            .select('*')
+            .eq('id_admin', id)
+            .eq('mdp_admin', password);
+
+        if (data && data.length > 0) {
+            // alert("Connecté !");
+            isAdmin = true;
+            hideAdminLogin();
+            initDisplay();
+            showAdminPanel();
+            checkAccessSetting();
+        } else {
+            alert('Identifiant ou mot de passe incorrect');
+        }
+    } catch (error) {
+        console.error('Erreur de connexion:', error);
+        alert('Erreur de connexion');
+    }
+}
+
+async function checkAccessSetting() {
+    try {
+        const { data, error } = await supabaseCli
+            .from('settings')
+            .select('*')
+            .eq('id', "suivi")
+            .single();
+
+        if (error) throw error;
+
+        isPublic = data.public_access;
+        document.getElementById('publicAccess').checked = isPublic;
+    } catch (error) {
+        console.error('Erreur récupération paramètre:', error);
+    }
+}
+
+async function togglePublicAccess() {
+    const isChecked = document.getElementById('publicAccess').checked;
+
+    try {
+        const { error } = await supabaseCli
+            .from('settings')
+            .update({ public_access: isChecked })
+            .eq('id', "suivi");
+
+        if (error) throw error;
+
+        isPublic = isChecked;
+        // alert('Paramètre mis à jour avec succès');
+
+        await initDisplay();
+
+        if (isPublic) {
+            hideAdminPanel();
+        }
+
+    } catch (error) {
+        console.error('Erreur mise à jour paramètre:', error);
+        document.getElementById('publicAccess').checked = !isChecked;
+    }
+}
+
+function logoutAdmin() {
+    isAdmin = false;
+    hideAdminPanel();
+    initDisplay();
+}
+
+function stillConnect() {
+    hideAdminPanel();
+}
 
 // Initialisation de l'affichage
-function initDisplay() {
-    initBins();
-    initStats();
+async function initDisplay() {
+    await checkAccessSetting();
+
+    if (isAdmin || isPublic) {
+        initBins();
+        initStats();
+        fetchAllData();
+    } else {
+        document.getElementById('bins').innerHTML = '<p>Connectez-vous en tant qu\'admin pour voir les statistiques</p>';
+        document.getElementById('stats').innerHTML = '<p>Connectez-vous en tant qu\'admin pour voir les statistiques</p>';
+        document.getElementById('totalWaste').style.display = 'none';
+    }
 }
 
 function initBins() {
@@ -61,6 +177,7 @@ function initStats() {
 
 // Fonction principale pour récupérer toutes les données
 async function fetchAllData() {
+
     isUsingMockData = false;
 
     try {
@@ -118,19 +235,24 @@ async function fetchStats() {
 
 // Mettre à jour l'affichage des statistiques
 function updateStatsDisplay(stats) {
-    // Mettre à jour le total
     const totalElement = document.getElementById('totalWaste');
-    if (totalElement) {
+    if (!totalElement) return;
+
+    // Mettre à jour le total
+    if (isAdmin || isPublic) {
+        totalElement.style.display = 'block';
         totalElement.textContent = `Total déchets triés: ${stats.total}`;
+    } else {
+        totalElement.style.display = 'none';
     }
 
     // Mapping corrigé pour correspondre aux données Python
     const categoryMapping = {
         "papier": 0,           // Correspond à "papier_carton" dans l'affichage
-        "plastique": 1,        
-        "verre": 2,            
-        "metal": 3,            
-        "non_recyclable": 4    
+        "plastique": 1,
+        "verre": 2,
+        "metal": 3,
+        "non_recyclable": 4
     };
 
     Object.keys(categoryMapping).forEach(category => {
@@ -145,7 +267,7 @@ function updateStatsDisplay(stats) {
     if (stats.derniere_detection) {
         const lastDetection = stats.derniere_detection;
         console.log(`Dernière détection: ${lastDetection.type} (${lastDetection.confidence}%) à ${lastDetection.timestamp}`);
-        
+
         // Optionnel : afficher dans l'interface
         displayLastDetection(lastDetection);
     }
@@ -158,11 +280,11 @@ function displayLastDetection(detection) {
         const labelMapping = {
             "cardboard_paper": "Papier/Carton",
             "plastic": "Plastique",
-            "metal": "Métal", 
+            "metal": "Métal",
             "glass": "Verre",
             "trash": "Non recyclable"
         };
-        
+
         const frenchLabel = labelMapping[detection.type] || detection.type;
         lastDetectionElement.textContent = `Dernière détection: ${frenchLabel} (${detection.confidence}%)`;
     }
@@ -179,6 +301,7 @@ function useMockData() {
 
     // Utiliser les statistiques simulées
     useSimulatedStats();
+    updateStatus(); // Ajoutez cette ligne
 }
 
 // Statistiques simulées
@@ -191,7 +314,7 @@ function useSimulatedStats() {
         metal: Math.floor(Math.random() * 15),
         non_recyclable: Math.floor(Math.random() * 10)
     };
-    
+
     updateStatsDisplay(simulatedStats);
 }
 
@@ -289,42 +412,8 @@ async function resetStats() {
     }
 }
 
-// === NOTIFICATIONS GOOGLE SHEETS ===
-async function fetchNotifications() {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${API_KEY}`;
-    const notifContent = document.getElementById("notifContent");
-
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-        const rows = data.values;
-
-        notifContent.innerHTML = rows.length > 1
-            ? rows.slice(1).reverse().slice(0, 10).map(row => `
-                <p>📩 ${row[0]} a atteint ${row[1]}% à ${row[2]}</p>
-            `).join('')
-            : "<p>Aucune notification trouvée</p>";
-
-    } catch (error) {
-        console.error("Erreur notifications :", error);
-        notifContent.innerHTML = "<p>Erreur lors de la récupération des notifications.</p>";
-    }
-}
-
-function displayLog() {
-    document.getElementById("notifLog").style.display = "block";
-    document.getElementById("shadow").style.display = "block";
-    fetchNotifications();
-}
-
-function hideLog() {
-    document.getElementById("notifLog").style.display = "none";
-    document.getElementById("shadow").style.display = "none";
-}
-
 // Initialisation au chargement
 document.addEventListener('DOMContentLoaded', async () => {
-    initDisplay();
 
     // Tester la connexion avant de commencer
     const connected = await testConnection();
@@ -334,8 +423,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("⚠️ API non accessible, mode simulation");
     }
 
-    // Premier appel (fetchStats est déjà appelé dans fetchAllData)
-    fetchAllData();
+    // Initialiser l'affichage (fetchAllData inclus)
+    await initDisplay();
+
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        loginAdmin();
+    });
+
+    document.getElementById('publicAccess').addEventListener('change', togglePublicAccess);
 
     // Mise à jour toutes les 5 secondes
     updateInterval = setInterval(fetchAllData, 5000);
