@@ -27,7 +27,9 @@ let isAdmin = false;
 let isPublic = false;
 
 // Configuration Supabase
-const supabaseCli = supabase.createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const _supabaseUrl = 'https://umrlwpojlfvqawgyooqr.supabase.co'; 
+const _supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtcmx3cG9qbGZ2cWF3Z3lvb3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNzM3NDEsImV4cCI6MjA2NTY0OTc0MX0.Y25eExN0JKgbEyB20vAV-6_-zqndYp29s3AWayJ6GSA'; 
+const supabaseCli = supabase.createClient(_supabaseUrl, _supabaseKey);
 
 // Fonctions d'administration
 async function showAdminLogin() {
