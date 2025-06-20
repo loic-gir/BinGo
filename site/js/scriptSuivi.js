@@ -9,6 +9,16 @@ const NGROK_HEADERS = {
 const LEVEL_VARS = ["niveau_bac1", "niveau_bac2", "niveau_bac3", "niveau_bac4", "niveau_bac5"];
 const WASTE_VARS = ["plastique", "papier_carton", "verre", "metal", "non_recyclable"];
 
+const EMAILJS_SERVICE_ID = "service_e3jidvj";
+const EMAILJS_TEMPLATE_ID = "template_khtq26c";
+const EMAILJS_USER_ID = "VqdRukFY9mMrez9Kh";
+const DESTINATAIRE_EMAIL = "xingtong.lin@edu.esiee.fr";
+
+emailjs.init({
+    publicKey: EMAILJS_USER_ID,
+    blockHeadless: true // Empêche les robots d'utiliser votre clé
+});
+// emailjs.init(EMAILJS_USER_ID);
 
 // Icônes et labels
 const WASTE_CONFIG = {
@@ -27,8 +37,8 @@ let isAdmin = false;
 let isPublic = false;
 
 // Configuration Supabase
-const _supabaseUrl = 'https://umrlwpojlfvqawgyooqr.supabase.co'; 
-const _supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtcmx3cG9qbGZ2cWF3Z3lvb3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNzM3NDEsImV4cCI6MjA2NTY0OTc0MX0.Y25eExN0JKgbEyB20vAV-6_-zqndYp29s3AWayJ6GSA'; 
+const _supabaseUrl = 'https://umrlwpojlfvqawgyooqr.supabase.co';
+const _supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtcmx3cG9qbGZ2cWF3Z3lvb3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNzM3NDEsImV4cCI6MjA2NTY0OTc0MX0.Y25eExN0JKgbEyB20vAV-6_-zqndYp29s3AWayJ6GSA';
 const supabaseCli = supabase.createClient(_supabaseUrl, _supabaseKey);
 
 // Fonctions d'administration
@@ -199,6 +209,13 @@ async function fetchAllData() {
         for (let i = 0; i < LEVEL_VARS.length; i++) {
             const level = data[LEVEL_VARS[i]] || 0;
             updateBinDisplay(i, level);
+
+            if (level >= 98) {
+                await sendEmail(
+                    `Alerte Bac ${i + 1} - BinGo!`,
+                    `Le bac ${i + 1} est presque plein (${level}%)! Intervention humaine requise dans les plus brefs délais.`
+                );
+            }
         }
 
         // Récupération des statistiques
@@ -210,6 +227,21 @@ async function fetchAllData() {
     }
 
     updateStatus();
+}
+
+async function sendEmail(title, message) {
+    try {
+        const response = await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            to_email: DESTINATAIRE_EMAIL,
+            title: title,
+            message: message
+        });
+        console.log("Email envoyé à", DESTINATAIRE_EMAIL, ". Status:", response.status);
+        return response;
+    } catch (error) {
+        console.error("Échec d'envoi :", error);
+        throw error;
+    }
 }
 
 // Récupérer les statistiques depuis l'API Flask
@@ -306,6 +338,10 @@ function useMockData() {
     updateStatus(); // Ajoutez cette ligne
 }
 
+function getRandomLevel() {
+    return Math.floor(Math.random() * 100);
+}
+
 // Statistiques simulées
 function useSimulatedStats() {
     const simulatedStats = {
@@ -340,15 +376,6 @@ async function testConnection() {
     }
 }
 
-// Fonctions utilitaires
-function getRandomLevel() {
-    return Math.floor(Math.random() * 100);
-}
-
-function getRandomWasteCount() {
-    return Math.floor(Math.random() * 50);
-}
-
 // Mise à jour de l'affichage des bacs
 function updateBinDisplay(index, value) {
     const label = document.getElementById(`label-${index}`);
@@ -362,12 +389,6 @@ function updateBinDisplay(index, value) {
         bar.style.backgroundColor = value >= 95 ? "#e53935" :
             value >= 60 ? "#ff9800" : "#4caf50";
     }
-}
-
-// Fonction de compatibilité pour les données simulées
-function updateStatDisplay(index, count) {
-    const statValue = document.getElementById(`stat-value-${index}`);
-    if (statValue) statValue.textContent = count;
 }
 
 // Mise à jour du statut
@@ -395,26 +416,14 @@ function stopUpdates() {
     }
 }
 
-// Fonction pour remettre à zéro les statistiques (optionnel)
-async function resetStats() {
-    try {
-        const res = await fetch(`${NGROK_API_URL}/api/stats/reset`, {
-            method: 'POST',
-            headers: NGROK_HEADERS
-        });
-
-        if (res.ok) {
-            const result = await res.json();
-            console.log("Statistiques remises à zéro:", result);
-            // Rafraîchir l'affichage
-            fetchStats();
-        }
-    } catch (error) {
-        console.error("Erreur reset stats:", error);
-    }
-}
-
 // Initialisation au chargement
+document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    loginAdmin();
+});
+
+document.getElementById('publicAccess').addEventListener('change', togglePublicAccess);
+
 document.addEventListener('DOMContentLoaded', async () => {
 
     // Tester la connexion avant de commencer
@@ -425,15 +434,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("⚠️ API non accessible, mode simulation");
     }
 
+    // nbr d'envoie limité donc pas tester chaque fois
+    // try {
+    //     await sendEmail("Notification Test - BinGo!", "Ceci est un message test technique pour vérifier le bon fonctionnement du système d'alertes.");
+    //     console.log("✅ Test OK - Vérifiez vos emails");
+    // } catch (error) {
+    //     console.error("❌ Échec critique :", error);
+    // }
+
     // Initialiser l'affichage (fetchAllData inclus)
     await initDisplay();
-
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        loginAdmin();
-    });
-
-    document.getElementById('publicAccess').addEventListener('change', togglePublicAccess);
 
     // Mise à jour toutes les 5 secondes
     updateInterval = setInterval(fetchAllData, 5000);
