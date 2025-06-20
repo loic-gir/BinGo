@@ -1,7 +1,7 @@
 // === CONFIGURATION ===
 const UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsY";
 const DEVICE = "BinGo";
-const NGROK_API_URL = "https://9194-79-174-206-181.ngrok-free.app"; // URL de l'API Flask via ngrok
+const NGROK_API_URL = "https://af6a-79-174-206-181.ngrok-free.app"; // URL de l'API Flask via ngrok
 
 const LEVEL_VARS = ["niveau_bac1", "niveau_bac2", "niveau_bac3", "niveau_bac4", "niveau_bac5"];
 const WASTE_VARS = ["plastique", "papier_carton", "verre", "metal", "non_recyclable"];
