@@ -2,76 +2,260 @@
 <html lang="fr">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BinGo - Suivi des Bacs</title>
-  <link rel="stylesheet" type="text/css" href="css/style.css" />
-  <link rel="stylesheet" type="text/css" href="css/styleIndex.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/script.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinGo! - Accueil</title>
+    <link rel="stylesheet" type="text/css" href="css/styleGlobal.css" />
+    <link rel="stylesheet" type="text/css" href="css/styleIndex.css" />
+    <script src="https://cdn.jsdelivr.net/npm/scrollreveal@4.0.9/dist/scrollreveal.min.js"></script>
+    <script src="js/scriptIndex.js"></script>
 </head>
 
 <body>
-  <header>
-    <button class="header-btn" id="adminBtn" onclick="showAdminLogin()">⚙️</button>
-    <div class="header-center">
-      <a href="home.html"><img src="assets/logo.png" alt="Logo" /></a>
-    </div>
-    <div style="width: 40px;"></div>
-  </header>
-
-  <div id="adminLogin" class="admin-popup">
-    <div class="admin-content">
-      <h2>Connexion Admin</h2>
-      <form id="loginForm">
-        <input type="text" id="adminId" placeholder="Identifiant" required autocomplete="username">
-        <input type="password" id="adminPassword" placeholder="Mot de passe" required autocomplete="current-password">
-        <div class="admin-btns">
-          <button type="submit">Se connecter</button>
-          <button type="button" onclick="hideAdminLogin()">Annuler</button>
+    <header>
+        <a class="header-btn" href="suivi.html">📊</a>
+        <div class="header-center">
+            <img src="assets/logo.png" alt="Logo" />
         </div>
-      </form>
-    </div>
-  </div>
+        <div style="width: 40px;"></div>
+    </header>
 
-  <div id="adminPanel" class="admin-popup" style="display:none;">
-    <div class="admin-content">
-      <h2>Panneau d'administration</h2>
-      <div class="admin-controls">
-        <label>
-          <input type="checkbox" id="publicAccess"> Rendre les données publiques
-        </label>
-        <div class="admin-btns">
-          <button onclick="stillConnect()">Rester connecté</button>
-          <button onclick="logoutAdmin()">Déconnexion</button>
+    <section class="presentation">
+        <h2>Présentation du projet</h2>
+        <p>
+            BinGo! est une poubelle intelligente capable de trier automatiquement les déchets grâce à notre
+            intelligence
+            artificielle et bras robotisé. Conçue pour les environnements semi-publics comme les entreprises, hôtels
+            ou
+            universités, elle facilite le geste écologique tout en réduisant les erreurs de tri.
+        </p>
+        <p>
+            Grâce à une interface intuitive, une IA performante (> 90% de réussite), et une mécanique automatisée,
+            BinGo! rend le recyclage plus rapide et plus efficace.
+        </p>
+    </section>
+
+    <section class="technique">
+        <h2>Fonctionnalités et Technologies</h2>
+        <ul>
+            <li>Caméra (Webcam / Raspberry Pi)</li>
+            <li>IA avec OpenCV</li>
+            <li>Spectromètre pour analyse de matière</li>
+            <li>Bras robotisé à 4 axes : base, épaule, coude, poignet</li>
+            <li>Capteur de poids, couleur</li>
+            <li>Interface écran (Tkinter/PyQt)</li>
+            <li>Arduino Uno pour capteurs et moteurs</li>
+            <li>Raspberry Pi 4 pour IA, IHM et communication</li>
+            <li>Suivi du remplissage via Ubidots STEM avec envoi de notifications</li>
+        </ul>
+    </section>
+
+    <section class="equipe">
+        <h2>Notre équipe</h2>
+        <p>Nous sommes une équipe de 6 étudiants en première année du cycle ingénieur à l'ESIEE Paris :</p>
+        <div class="membre">
+            <p class="membre-left pers"> Achveiya APPUDURAI </p>
+            <p class="parole-left"> [à définir] </p>
+            <div style="width: 40px;"></div>
         </div>
-      </div>
-    </div>
-  </div>
+        <div class="membre">
+            <div style="width: 40px;"></div>
+            <p class="parole-right"> [à définir] </p>
+            <p class="membre-right pers"> Dina HAMADEH </p>
+        </div>
+        <div class="membre">
+            <p class="membre-left pers"> Japleen KAUR
+            <p class="parole-left"> [à définir] </p>
+            <div style="width: 40px;"></div>
+        </div>
+        <div class="membre">
+            <div style="width: 40px;"></div>
+            <p class="parole-right"> [à définir] </p>
+            <p class="membre-right pers"> Logan ABRAHAM </p>
+        </div>
+        <div class="membre">
+            <p class="membre-left pers"> Loïc GIRARDIN
+            <p class="parole-left"> [à définir] </p>
+            <div style="width: 40px;"></div>
+        </div>
+        <div class="membre">
+            <div style="width: 40px;"></div>
+            <p class="parole-right"> [à définir] </p>
+            <p class="membre-right pers"> Xingtong LIN </p>
+        </div>
+    </section>
 
-  <div id="shadow" class="shadow"></div>
+    <section class="taches">
+        <h2>Tableau des tâches</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Partie</th>
+                    <th>Sous-partie</th>
+                    <th>Qui ?</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="color-row">
+                    <td rowspan="2">Analyse du besoin et cadrage du projet</td>
+                    <td>Détermination du public</td>
+                    <td rowspan="2">Dina HAMADEH, Logan ABRAHAM</td>
+                    <td rowspan="2">Permet de mettre un cadre et savoir quelles sont les différentes attentes en
+                        fonction du public visé. Important également pour la fréquence d'utilisation</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Fixer les besoins et les contraintes du projet</td>
+                </tr>
 
-  <div class="container">
-    <div class="dashboard-grid">
-      <div class="bins-section">
-        <h2>Niveaux des bacs</h2>
-        <div id="bins"></div>
-      </div>
+                <tr>
+                    <td rowspan="3">Conception préliminaire</td>
+                    <td>Conception d'un premier modèle</td>
+                    <td>Achveiya APPUDURAI, Japleen KAUR</td>
+                    <td rowspan="3">Idée et visuel pour faciliter la vision du but voulu</td>
+                </tr>
+                <tr>
+                    <td>Structure globale de la poubelle</td>
+                    <td>Dina HAMADEH</td>
+                </tr>
+                <tr>
+                    <td>Détermination des dimensions de la poubelle</td>
+                    <td>Dina HAMADEH, Japleen KAUR</td>
+                </tr>
 
-      <div class="stats-section">
-        <h2>Statistiques des déchets</h2>
-        <div id="stats" class="stats-grid"></div>
-        <div class="total-waste" id="totalWaste">Total déchets: 0</div>
-      </div>
-    </div>
+                <tr class="color-row">
+                    <td rowspan="10">Documentation et livrables</td>
+                    <td>Liste des matériaux</td>
+                    <td>Xingtong LIN, Loïc GIRARDIN</td>
+                    <td rowspan="10"></td>
+                </tr>
+                <tr class="color-row">
+                    <td>Regarder les servomoteurs adaptés pour le bras</td>
+                    <td>Japleen KAUR, Dina HAMADEH</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Branchement à la batterie</td>
+                    <td>Achveiya APPUDURAI</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Commande des matériaux</td>
+                    <td>Xingtong LIN, Dina HAMADEH</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Cahier des charges</td>
+                    <td>Xingtong LIN, Japleen KAUR</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Rédaction du rapport</td>
+                    <td>Japleen KAUR, Dina HAMADEH</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Rédaction du rapport éthique</td>
+                    <td>Logan ABRAHAM</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Cahier des charges et diagramme fonctionnel</td>
+                    <td>Logan ABRAHAM, Xingtong LIN</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Poster</td>
+                    <td>Japleen KAUR, Dina HAMADEH</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Logo</td>
+                    <td>Japleen KAUR</td>
+                </tr>
+
+                <tr>
+                    <td rowspan="2">Conception mécanique et prototype</td>
+                    <td>Prototype et assemblage du bras</td>
+                    <td>Japleen KAUR, Xingtong LIN</td>
+                    <td rowspan="2">création d'un prototype du bras et construction de la poubelle</td>
+                </tr>
+                <tr>
+                    <td>Construction de la poubelle</td>
+                    <td>Dina HAMADEH</td>
+                </tr>
+
+                <tr class="color-row">
+                    <td rowspan="2">Modélisation 3D et fabrication</td>
+                    <td>Modélisation 3D du bras</td>
+                    <td>Japleen KAUR</td>
+                    <td rowspan="2"></td>
+                </tr>
+                <tr class="color-row">
+                    <td>Impression du bras</td>
+                    <td>Japleen KAUR</td>
+                </tr>
+
+                <tr>
+                    <td rowspan="3">Electronique et programmation</td>
+                    <td>Coder sur Arduino pour capteurs et servomoteurs</td>
+                    <td>Dina HAMADEH, Xingtong LIN, Logan ABRAHAM</td>
+                    <td rowspan="3">Programmation des différents capteurs ainsi que des servomoteurs, tests et
+                        vérification</td>
+                </tr>
+                <tr>
+                    <td>Vérification du fonctionnement des codes</td>
+                    <td>Dina HAMADEH</td>
+                </tr>
+                <tr>
+                    <td>Schéma de liaison des composants</td>
+                    <td>Logan ABRAHAM</td>
+                </tr>
+
+                <tr class="color-row">
+                    <td rowspan="2">Interface et développement logiciel</td>
+                    <td>Site web</td>
+                    <td>Xingtong LIN</td>
+                    <td rowspan="2">Réalisation du site internet ainsi que de l'interface homme machine nécessaire
+                        pour le projet
+                    </td>
+                </tr>
+                <tr class="color-row">
+                    <td>IHM</td>
+                    <td>Xingtong LIN, Loïc GIRARDIN</td>
+                </tr>
+
+                <tr>
+                    <td rowspan="4">Intelligence artificielle et intégration</td>
+                    <td>Développement de l'intelligence artificielle</td>
+                    <td>Achveiya APPUDURAI</td>
+                    <td rowspan="4">Programmation de l'intelligence artificielle puis intégration des différents
+                        programmes sur
+                        le microcontrôleur Raspberry</td>
+                </tr>
+                <tr>
+                    <td>Mettre l'IA sur la Raspberry</td>
+                    <td>Loïc GIRARDIN, Dina HAMADEH</td>
+                </tr>
+                <tr>
+                    <td>Tester IA avec la caméra</td>
+                    <td>Achveiya APPUDURAI, Loïc GIRARDIN</td>
+                </tr>
+                <tr>
+                    <td>Faire le lien entre Raspberry et Arduino</td>
+                    <td>Loïc GIRARDIN, Logan ABRAHAM</td>
+                </tr>
+
+                <tr class="color-row">
+                    <td rowspan="2">Intégration finale et validation</td>
+                    <td>Faire le montage de la partie électronique</td>
+                    <td>qqn</td>
+                    <td rowspan="2">Montage du bras, branchements des parties électroniques et tests finaux</td>
+                </tr>
+                <tr class="color-row">
+                    <td>Test finaux de la poubelle</td>
+                    <td>qqn</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
 
     <footer>
-      <div id="updateStatus" class="update-status"></div>
-      <div id="lastDetection" class="last-detection"></div>
-      <p>&copy; 2025 BinGo! ESIEE Paris - Projet de fin d'année</p>
+        <p>&copy; 2025 BinGo! ESIEE Paris - Projet de fin d'année</p>
     </footer>
-  </div>
-
 </body>
 
 </html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BinGo - Suivi des Bacs</title>
+  <link rel="stylesheet" type="text/css" href="css/styleGlobal.css" />
+  <link rel="stylesheet" type="text/css" href="css/styleSuivi.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/scriptSuivi.js"></script>
+</head>
+
+<body>
+  <header>
+    <button class="header-btn" id="adminBtn" onclick="showAdminLogin()">⚙️</button>
+    <div class="header-center">
+      <a href="index.html"><img src="assets/logo.png" alt="Logo" /></a>
+    </div>
+    <div style="width: 40px;"></div>
+  </header>
+
+  <div id="adminLogin" class="admin-popup">
+    <div class="admin-content">
+      <h2>Connexion Admin</h2>
+      <form id="loginForm">
+        <input type="text" id="adminId" placeholder="Identifiant" required autocomplete="username">
+        <input type="password" id="adminPassword" placeholder="Mot de passe" required autocomplete="current-password">
+        <div class="admin-btns">
+          <button type="submit">Se connecter</button>
+          <button type="button" onclick="hideAdminLogin()">Annuler</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="adminPanel" class="admin-popup" style="display:none;">
+    <div class="admin-content">
+      <h2>Panneau d'administration</h2>
+      <div class="admin-controls">
+        <label>
+          <input type="checkbox" id="publicAccess"> Rendre les données publiques
+        </label>
+        <div class="admin-btns">
+          <button onclick="stillConnect()">Rester connecté</button>
+          <button onclick="logoutAdmin()">Déconnexion</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="shadow" class="shadow"></div>
+
+  <div class="container">
+    <div class="dashboard-grid">
+      <div class="bins-section">
+        <h2>Niveaux des bacs</h2>
+        <div id="bins"></div>
+      </div>
+
+      <div class="stats-section">
+        <h2>Statistiques des déchets</h2>
+        <div id="stats" class="stats-grid"></div>
+        <div class="total-waste" id="totalWaste">Total déchets: 0</div>
+      </div>
+    </div>
+
+    <footer>
+      <div id="updateStatus" class="update-status"></div>
+      <div id="lastDetection" class="last-detection"></div>
+      <p>&copy; 2025 BinGo! ESIEE Paris - Projet de fin d'année</p>
+    </footer>
+  </div>
+
+</body>
+
+</html>
