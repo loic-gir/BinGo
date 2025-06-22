@@ -416,14 +416,6 @@ function stopUpdates() {
     }
 }
 
-// Initialisation au chargement
-document.getElementById('loginForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    loginAdmin();
-});
-
-document.getElementById('publicAccess').addEventListener('change', togglePublicAccess);
-
 document.addEventListener('DOMContentLoaded', async () => {
 
     // Tester la connexion avant de commencer
@@ -447,6 +439,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Mise à jour toutes les 5 secondes
     updateInterval = setInterval(fetchAllData, 5000);
+
+    // Initialisation au chargement
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        loginAdmin();
+    });
+
+    document.getElementById('publicAccess').addEventListener('change', togglePublicAccess);
 });
 
 // Nettoyer lors de la fermeture de la page
