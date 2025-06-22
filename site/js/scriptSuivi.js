@@ -344,13 +344,19 @@ function getRandomLevel() {
 
 // Statistiques simulées
 function useSimulatedStats() {
+    const papier = Math.floor(Math.random() * 30);
+    const plastique = Math.floor(Math.random() * 25);
+    const verre = Math.floor(Math.random() * 20);
+    const metal = Math.floor(Math.random() * 15);
+    const non_recyclable = Math.floor(Math.random() * 10);
+
     const simulatedStats = {
-        total: Math.floor(Math.random() * 100) + 20,
-        papier: Math.floor(Math.random() * 30),
-        plastique: Math.floor(Math.random() * 25),
-        verre: Math.floor(Math.random() * 20),
-        metal: Math.floor(Math.random() * 15),
-        non_recyclable: Math.floor(Math.random() * 10)
+        papier, 
+        plastique, 
+        verre, 
+        metal, 
+        non_recyclable, 
+        total:papier+plastique+verre+metal+non_recyclable
     };
 
     updateStatsDisplay(simulatedStats);
