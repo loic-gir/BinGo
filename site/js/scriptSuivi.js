@@ -1,5 +1,5 @@
 // === CONFIGURATION ===
-const NGROK_API_URL = "https://ea6c-79-174-206-181.ngrok-free.app"; // URL de l'API Flask via ngrok
+const NGROK_API_URL = "https://5043-79-174-206-181.ngrok-free.app"; // URL de l'API Flask via ngrok
 
 const NGROK_HEADERS = {
     'ngrok-skip-browser-warning': 'true',
