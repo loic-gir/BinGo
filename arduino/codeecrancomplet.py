@@ -20,38 +20,34 @@ import requests
 from flask import Flask, render_template_string, jsonify
 from flask_cors import CORS
 
-# Suppress NumPy warnings about subnormal values
-warnings.filterwarnings("ignore", category=UserWarning, module="numpy.core.getlimits")
-
 # === Configuration ===
 class Config:
     # Chemins
     MODEL_PATH = "/home/bingo/Desktop/poubelle/waste_classifier8.tflite"
     LABELS_PATH = "label_encoder(6).pkl"
     
-    # Paramètres de détection optimisés
+    # Paramètres de détection
     INPUT_SHAPE = (224, 224)  # (hauteur, largeur)
     MIN_AREA = 1500   
     MAX_AREA = 150000 
     STABILIZATION_TIME = 3.0   # 3 secondes de stabilisation
     CONFIDENCE_THRESHOLD = 40  
     
-    # Nouveaux paramètres pour la stabilisation
     MIN_DETECTION_FRAMES = 10  # Minimum de frames consécutives nécessaires
     STABLE_CONFIDENCE_THRESHOLD = 40  # Confiance minimum pour considérer stable
     
-    # Paramètres de prétraitement avancés
+    # Paramètres de prétraitement
     BLUR_KERNEL = (5, 5)  
     CANNY_LOW = 30  
     CANNY_HIGH = 100  
     MORPH_KERNEL_SIZE = 3  
     
-    # Paramètres interface adaptés pour écran DSI Raspberry Pi
+    # Paramètres interface
     RESULT_DISPLAY_TIME = 2  
     CAMERA_WIDTH = 480  # Réduit pour écran DSI
     CAMERA_HEIGHT = 320  # Réduit pour écran DSI
     
-    # Dimensions interface adaptées pour écran DSI (800x480)
+    # Dimensions interface
     WINDOW_WIDTH = 800
     WINDOW_HEIGHT = 480
     FONT_SIZE_LARGE = 14  # Réduit
@@ -60,12 +56,12 @@ class Config:
     EMOJI_SIZE = 24       # Réduit
     
     # Configuration Arduino et Ubidots
-    ARDUINO_PORT = "/dev/ttyACM0"  # Adapte selon ton port
+    ARDUINO_PORT = "/dev/ttyACM0"  
     ARDUINO_BAUD = 115200
-    UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsYbc"  # Mettez votre vrai token
+    UBIDOTS_TOKEN = "BBUS-AoGq5fswhdE5DvDQv670osyzoGLAsYbc" 
     DEVICE_NAME = "BinGo"
     
-    # Palette moderne avec dégradés
+    # Palette
     COLORS = {
         "primary": "#6366F1",
         "primary_dark": "#4F46E5",
@@ -112,7 +108,7 @@ def init_arduino():
     """Initialiser la connexion Arduino avec détection automatique du port"""
     global arduino_serial
     
-    # Ports possibles à tester dans l'ordre
+    # Ports possibles
     possible_ports = [
         "/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2",
         "/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyACM2",
@@ -129,11 +125,11 @@ def init_arduino():
             arduino_serial.write(b"test\n")
             time.sleep(1)
             
-            print(f"✅ Arduino connecté sur {port}")
+            print(f"Arduino connecté sur {port}")
             return True
             
         except (serial.SerialException, FileNotFoundError, PermissionError) as e:
-            print(f"   ❌ Échec {port}: {e}")
+            print(f"Échec {port}: {e}")
             if arduino_serial:
                 try:
                     arduino_serial.close()
@@ -142,7 +138,7 @@ def init_arduino():
                 arduino_serial = None
             continue
     
-    print("❌ Aucun Arduino trouvé sur les ports testés")
+    print("Aucun Arduino trouvé")
     arduino_serial = None
     return False
 
@@ -151,14 +147,14 @@ def send_arduino_command(command):
     global arduino_serial
     
     if not arduino_serial:
-        print("⚠️ Arduino non connecté - Tentative de reconnexion...")
+        print("Arduino non connectée")
         if not init_arduino():
             return False
     
     try:
         # Vérifier que la connexion est toujours active
         if not arduino_serial.is_open:
-            print("⚠️ Connexion Arduino fermée - Reconnexion...")
+            print("Arduino fermée")
             if not init_arduino():
                 return False
         
@@ -166,11 +162,11 @@ def send_arduino_command(command):
         command_with_newline = command + '\n'
         arduino_serial.write(command_with_newline.encode('utf-8'))
         arduino_serial.flush()  # Forcer l'envoi
-        print(f"📤 Commande Arduino envoyée: {command}")
+        print(f"Commande Arduino envoyée: {command}")
         return True
         
     except (serial.SerialException, OSError) as e:
-        print(f"❌ Erreur envoi commande Arduino: {e}")
+        print(f"Erreur envoi commande Arduino: {e}")
         # Tentative de reconnexion
         try:
             arduino_serial.close()
@@ -189,9 +185,9 @@ def envoyer_donnees(device, variables):
         url = f"https://industrial.api.ubidots.com/api/v1.6/devices/{device}/"
         headers = {"X-Auth-Token": Config.UBIDOTS_TOKEN, "Content-Type": "application/json"}
         response = requests.post(url, json=variables, headers=headers, timeout=10)
-        print(f"📊 Ubidots: {response.status_code} - {variables}")
+        print(f"Ubidots: {response.status_code} - {variables}")
     except Exception as e:
-        print(f"❌ Erreur Ubidots: {e}")
+        print(f"Erreur: {e}")
 
 def lire_arduino():
     """Lire les données de l'Arduino avec gestion d'erreurs"""
@@ -206,7 +202,7 @@ def lire_arduino():
             
         if arduino_serial.in_waiting > 0:
             ligne = arduino_serial.readline().decode('utf-8').strip()
-            print(f"📥 Arduino: {ligne}")
+            print(f"Arduino: {ligne}")
             
             if ligne.startswith("forSite"):
                 try:
@@ -236,12 +232,12 @@ def lire_arduino():
                         
                         return data
                 except ValueError:
-                    print("❌ Erreur parsing données capteurs")
+                    print("Erreur données capteurs")
             return ligne
             
     except (serial.SerialException, UnicodeDecodeError, OSError) as e:
-        print(f"❌ Erreur lecture Arduino: {e}")
-        # Fermer la connexion défaillante
+        print(f"Erreur lecture Arduino: {e}")
+        # Fermer la connexion
         try:
             arduino_serial.close()
         except:
@@ -259,7 +255,7 @@ def arduino_monitor_thread():
         try:
             if arduino_serial is None:
                 if reconnect_attempts < max_reconnect_attempts:
-                    print(f"🔄 Tentative de reconnexion Arduino ({reconnect_attempts + 1}/{max_reconnect_attempts})")
+                    print(f"Tentative de reconnexion Arduino ({reconnect_attempts + 1}/{max_reconnect_attempts})")
                     if init_arduino():
                         reconnect_attempts = 0
                     else:
@@ -273,7 +269,7 @@ def arduino_monitor_thread():
                 time.sleep(0.1)
                 
         except Exception as e:
-            print(f"❌ Erreur thread Arduino: {e}")
+            print(f"Erreur thread Arduino: {e}")
             time.sleep(1)
 
 # === SERVEUR WEB FLASK ===
@@ -376,12 +372,12 @@ class DetectionSystem:
             
             time.sleep(2)
             
-            # === CAMÉRA USB AVEC DÉTECTION INTELLIGENTE ===
+            # === CAMÉRA USB ===
             os.environ['OPENCV_VIDEOIO_PRIORITY_V4L2'] = '1'
             
             print("🔍 Recherche intelligente de caméra USB...")
             
-            camera_candidates = [2, 3, 0, 1]  # Commencer par /dev/video2
+            camera_candidates = [2, 3, 0, 1]
             for camera_id in camera_candidates:
                 try:
                     print(f"   Test /dev/video{camera_id}...")
@@ -402,7 +398,7 @@ class DetectionSystem:
                         
                         if success_count >= 2:
                             self.cap = cap
-                            print(f"✅ Caméra USB trouvée sur /dev/video{camera_id}")
+                            print(f"Caméra USB trouvée sur /dev/video{camera_id}")
                             print(f"   Format: {test_frame.shape}")
                             break
                         else:
@@ -414,7 +410,7 @@ class DetectionSystem:
                     continue
             
             if not hasattr(self, 'cap') or not self.cap:
-                raise Exception("❌ Aucune caméra USB fonctionnelle trouvée")
+                raise Exception("Aucune caméra trouvée")
             
             # === CHARGEMENT DU MODÈLE ===
             if os.path.exists(Config.MODEL_PATH):
@@ -428,7 +424,7 @@ class DetectionSystem:
             if os.path.exists(Config.LABELS_PATH):
                 with open(Config.LABELS_PATH, "rb") as f:
                     self.label_encoder = pickle.load(f)
-                    print(f"✅ Label encoder chargé: {len(self.label_encoder.classes_)} classes")
+                    print(f"Label encoder chargé: {len(self.label_encoder.classes_)} classes")
                     print(f"Classes disponibles: {list(self.label_encoder.classes_)}")
             else:
                 default_labels = ["cardboard_paper", "plastic", "metal", "glass", "trash"]
@@ -448,12 +444,12 @@ class DetectionSystem:
         """Créer la fenêtre de la caméra"""
         try:
             self.camera_window = tk.Toplevel(root)
-            self.camera_window.title("🎥 Vue Caméra - BinGo")
+            self.camera_window.title("Vue Caméra")
             self.camera_window.geometry(f"{Config.CAMERA_WIDTH + 20}x{Config.CAMERA_HEIGHT + 60}")
             self.camera_window.configure(bg=Config.COLORS["surface"])
             self.camera_label = tk.Label(self.camera_window, bg=Config.COLORS["surface"])
             self.camera_label.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-            print("✅ Fenêtre caméra créée")
+            print("Fenêtre caméra créée")
         except Exception as e:
             print(f"Erreur création fenêtre caméra: {e}")
 
@@ -464,7 +460,7 @@ class DetectionSystem:
                 self.camera_window.destroy()
                 self.camera_window = None
                 self.camera_label = None
-                print("✅ Fenêtre caméra fermée")
+                print("Fenêtre caméra fermée")
         except Exception as e:
             print(f"Erreur fermeture fenêtre caméra: {e}")
 
@@ -555,9 +551,9 @@ class DetectionSystem:
                 ret, frame = self.cap.read()
                 if not ret:
                     consecutive_errors += 1
-                    print(f"⚠️ Erreur capture USB #{consecutive_errors}")
+                    print(f"Erreur capture USB")
                     if consecutive_errors >= max_consecutive_errors:
-                        print("❌ Trop d'erreurs de capture USB")
+                        print("Trop d'erreurs de capture")
                         break
                     time.sleep(0.1)
                     continue
@@ -680,7 +676,7 @@ class CommunicationSystem:
                     avg_confidence = sum(self.confidence_history) / len(self.confidence_history)
                     if avg_confidence >= Config.CONFIDENCE_THRESHOLD:
                         self.is_analyzing = True
-                        print(f"✅ Objet stable détecté après 3s: {label} ({avg_confidence:.1f}%)")
+                        print(f"Objet stable détecté après 3s: {label} ({avg_confidence:.1f}%)")
                         self.start_displaying_result()
                         self.detection_queue.put(("validation", label, avg_confidence, image_data))
                         self.reset_stability_tracking()
@@ -694,7 +690,7 @@ class CommunicationSystem:
                 (timestamp - self.last_object_time > self.no_object_timeout)):
                 if not self.detection_queue.empty():
                     return
-                print("📭 Aucun objet stable détecté")
+                print("Aucun objet stable détecté")
                 self.detection_queue.put(("NO_OBJECT", 0))
                 self.reset_stability_tracking()
                 self.last_object_time = None
@@ -703,13 +699,13 @@ class CommunicationSystem:
         """Démarre l'affichage bloquant du résultat"""
         self.is_displaying_result = True
         self.display_start_time = time.time()
-        print("🚫 BLOCAGE : Affichage du résultat pendant 2 secondes")
+        print("Affichage du résultat pendant 2 secondes")
 
     def stop_displaying_result(self):
         """Arrête l'affichage bloquant"""
         self.is_displaying_result = False
         self.display_start_time = None
-        print("✅ DÉBLOCAGE : Prêt pour nouvelle détection")
+        print("Prêt pour nouvelle détection")
 
     def is_blocked_for_display(self):
         """Vérifie si le système est bloqué pour affichage"""
@@ -729,7 +725,7 @@ class CommunicationSystem:
         self.is_analyzing = False
         self.detection_history.clear()
         self.confidence_history.clear()
-        print(f"🎯 Début de stabilisation pour: {label}")
+        print(f"Début de stabilisation pour: {label}")
 
     def reset_stability_tracking(self):
         """Reset tous les paramètres de stabilité"""
@@ -821,14 +817,14 @@ class MainApplication(tk.Tk):
         forbidden_container = tk.Frame(parent, bg=Config.COLORS["background"])
         forbidden_container.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         
-        # CRÉER LA CARTE AVEC TITRE PERSONNALISÉ
+        # CRÉER LA CARTE AVEC TITRE
         shadow_frame = tk.Frame(forbidden_container, bg=Config.COLORS["shadow"], padx=1, pady=1)
         shadow_frame.pack(fill="x")
         
         card_frame = tk.Frame(shadow_frame, bg=Config.COLORS["card"], padx=10, pady=8, relief="flat")
         card_frame.pack(fill="both", expand=True)
         
-        # TITRE AVEC ICÔNE PERSONNALISÉE
+        # TITRE AVEC ICÔNE
         title_frame = tk.Frame(card_frame, bg=Config.COLORS["card"])
         title_frame.pack(anchor="w", pady=(0, 5))
         
@@ -838,15 +834,8 @@ class MainApplication(tk.Tk):
             interdit_image = Image.open(interdit_icon_path).resize((18, 18), Image.Resampling.LANCZOS)
             interdit_tk = ImageTk.PhotoImage(interdit_image)
             
-            # Stocker la référence pour éviter le garbage collection
-            if not hasattr(self, 'interdit_icon_ref'):
-                self.interdit_icon_ref = interdit_tk
-            
-            tk.Label(title_frame, image=interdit_tk, bg=Config.COLORS["card"]).pack(side="left", padx=(0, 8))
-            
         except Exception as e:
             print(f"Erreur chargement icône interdit: {e}")
-            # Fallback emoji
             tk.Label(title_frame, text="🚫", font=("Segoe UI Emoji", 16), bg=Config.COLORS["card"]).pack(side="left", padx=(0, 8))
         
         tk.Label(title_frame, text="Objets Interdits", 
@@ -860,7 +849,7 @@ class MainApplication(tk.Tk):
         content_frame = tk.Frame(forbidden_content, bg=Config.COLORS["card"])
         content_frame.pack(fill="x", padx=5, pady=5)
         
-        # OBJETS INTERDITS AVEC IMAGES PERSONNALISÉES
+        # OBJETS INTERDITS AVEC IMAGES
         forbidden_items = [
             ("/home/bingo/Desktop/poubelle/icons/medoc.jpg", "Médicaments"),
             ("/home/bingo/Desktop/poubelle/icons/pile.png", "Piles"),
@@ -870,10 +859,6 @@ class MainApplication(tk.Tk):
         
         items_frame = tk.Frame(content_frame, bg=Config.COLORS["card"])
         items_frame.pack(fill="x", pady=(0, 5))
-        
-        # Stocker les références d'images pour éviter le garbage collection
-        if not hasattr(self, 'forbidden_icon_refs'):
-            self.forbidden_icon_refs = []
         
         for icon_path, item_name in forbidden_items:
             item_frame = tk.Frame(items_frame, bg=Config.COLORS["card"])
@@ -1110,17 +1095,17 @@ class MainApplication(tk.Tk):
     def start_systems(self):
         # Initialiser Arduino
         if init_arduino():
-            print("✅ Arduino connecté et prêt")
+            print("Arduino connecté et prêt")
             # Démarrer le thread de surveillance Arduino
             arduino_thread = threading.Thread(target=arduino_monitor_thread, daemon=True)
             arduino_thread.start()
         else:
-            print("⚠️ Arduino non disponible - Mode simulation")
+            print("Arduino non disponible - Mode simulation")
         
         # NOUVEAU : Démarrer le serveur Flask
         flask_thread = threading.Thread(target=start_flask_server, daemon=True)
         flask_thread.start()
-        print("🌐 Serveur Flask démarré sur http://localhost:5000")
+        print("Serveur Flask démarré sur http://localhost:5000")
         
         self.detection.start(self)
         self.update_status("Détection active - Serveur web actif")
@@ -1151,7 +1136,7 @@ class MainApplication(tk.Tk):
     
         print(f"DÉTECTION CONFIRMÉE après 3s: {label} ({confidence:.1f}%)")
     
-        # METTRE À JOUR LES STATISTIQUES GLOBALES
+        # METTRE À JOUR LES STATISTIQUES
         stats_data["total"] += 1
         stats_data["timestamp_stats"] = time.strftime("%Y-%m-%d %H:%M:%S")
         stats_data["derniere_detection"] = {
@@ -1183,11 +1168,11 @@ class MainApplication(tk.Tk):
         arduino_command = label_mapping.get(label, "non recyclable")
     
         if send_arduino_command(arduino_command):
-            print(f"🤖 Commande Arduino envoyée: {arduino_command}")
+            print(f"Commande Arduino envoyée: {arduino_command}")
             self.update_status(f"✅ CONFIRMÉ: {label} - Arduino activé")
         else:
-            print("⚠️ Échec envoi commande Arduino")
-            self.update_status(f"⚠️ CONFIRMÉ: {label} - Arduino non disponible")
+            print("Échec envoi commande Arduino")
+            self.update_status(f"CONFIRMÉ: {label} - Arduino non disponible")
     
         self.update_stats(label)
         self.create_result_display(label, confidence)
@@ -1202,7 +1187,7 @@ class MainApplication(tk.Tk):
     def start_countdown_status(self, label):
         def countdown(seconds_left):
             if seconds_left > 0:
-                self.update_status(f"✅ CONFIRMÉ: {label} - Retour dans {seconds_left}s")
+                self.update_status(f"CONFIRMÉ: {label} - Retour dans {seconds_left}s")
                 self.after(1000, lambda: countdown(seconds_left - 1))
             else:
                 self.update_status("🟢 Système prêt")
@@ -1239,7 +1224,7 @@ class MainApplication(tk.Tk):
         for key in self.stats:
             self.stats[key] = 0
         self.update_stats_display()
-        self.update_status("📊 Statistiques remises à zéro")
+        self.update_status("Statistiques remises à zéro")
 
     def toggle_camera(self):
         if self.detection.camera_window is None:
@@ -1272,18 +1257,17 @@ def main():
         comm_system = CommunicationSystem()
         detection_system = DetectionSystem(comm_system)
         app = MainApplication(comm_system, detection_system)
-        print("✅ Interface utilisateur créée")
-        print("🎯 Système de détection initialisé") 
-        print("🤖 Contrôleur Arduino intégré")
+        print("Interface utilisateur créée")
+        print("Système de détection initialisé")
         print("=" * 60)
         print("BinGo est prêt à fonctionner!")
         app.mainloop()
     except KeyboardInterrupt:
-        print("\n🛑 Arrêt demandé par l'utilisateur")
+        print("Arrêt")
     except Exception as e:
-        print(f"❌ Erreur critique: {str(e)}")
+        print(f"Erreur : {str(e)}")
     finally:
-        print("🔚 Arrêt de BinGo")
+        print("Arrêt de BinGo")
 
 if __name__ == "__main__":
     main()
