@@ -14,10 +14,6 @@ import queue
 import os
 import math
 from sklearn.preprocessing import LabelEncoder
-import warnings
-
-# Suppress NumPy warnings about subnormal values
-warnings.filterwarnings("ignore", category=UserWarning, module="numpy.core.getlimits")
 
 # === Configuration ===
 class Config:
@@ -25,29 +21,28 @@ class Config:
     MODEL_PATH = "/home/bingo/Desktop/poubelle/waste_classifier8.tflite"
     LABELS_PATH = "label_encoder(6).pkl"
     
-    # Paramètres de détection optimisés
+    # Paramètres de détection 
     INPUT_SHAPE = (224, 224)  # (hauteur, largeur)
     MIN_AREA = 1500   
     MAX_AREA = 150000 
     STABILIZATION_TIME = 3.0   # 3 secondes de stabilisation
     CONFIDENCE_THRESHOLD = 40  
     
-    # Nouveaux paramètres pour la stabilisation
     MIN_DETECTION_FRAMES = 10  # Minimum de frames consécutives nécessaires
     STABLE_CONFIDENCE_THRESHOLD = 40  # Confiance minimum pour considérer stable
     
-    # Paramètres de prétraitement avancés
+    # Paramètres de prétraitement
     BLUR_KERNEL = (5, 5)  
     CANNY_LOW = 30  
     CANNY_HIGH = 100  
     MORPH_KERNEL_SIZE = 3  
     
-    # Paramètres interface adaptés pour écran DSI Raspberry Pi
+    # Paramètres interface 
     RESULT_DISPLAY_TIME = 2  
-    CAMERA_WIDTH = 480  # Réduit pour écran DSI
-    CAMERA_HEIGHT = 320  # Réduit pour écran DSI
+    CAMERA_WIDTH = 480  
+    CAMERA_HEIGHT = 320  
     
-    # Dimensions interface adaptées pour écran DSI (800x480)
+    # Dimensions interface 
     WINDOW_WIDTH = 800
     WINDOW_HEIGHT = 480
     FONT_SIZE_LARGE = 14  # Réduit
@@ -55,7 +50,7 @@ class Config:
     FONT_SIZE_SMALL = 8   # Réduit
     EMOJI_SIZE = 24       # Réduit
     
-    # Palette moderne avec dégradés
+    # Palette
     COLORS = {
         "primary": "#6366F1",
         "primary_dark": "#4F46E5",
@@ -132,7 +127,7 @@ class DetectionSystem:
                         
                         if success_count >= 2:
                             self.cap = cap
-                            print(f"✅ Caméra USB trouvée sur /dev/video{camera_id}")
+                            print(f"Caméra USB trouvée sur /dev/video{camera_id}")
                             print(f"   Format: {test_frame.shape}")
                             break
                         else:
@@ -144,7 +139,7 @@ class DetectionSystem:
                     continue
             
             if not hasattr(self, 'cap') or not self.cap:
-                raise Exception("❌ Aucune caméra USB fonctionnelle trouvée")
+                raise Exception(" Aucune caméra trouvée")
             
             # === CHARGEMENT DU MODÈLE ===
             if os.path.exists(Config.MODEL_PATH):
@@ -158,7 +153,7 @@ class DetectionSystem:
             if os.path.exists(Config.LABELS_PATH):
                 with open(Config.LABELS_PATH, "rb") as f:
                     self.label_encoder = pickle.load(f)
-                    print(f"✅ Label encoder chargé: {len(self.label_encoder.classes_)} classes")
+                    print(f"Label encoder chargé: {len(self.label_encoder.classes_)} classes")
                     print(f"Classes disponibles: {list(self.label_encoder.classes_)}")
             else:
                 default_labels = ["cardboard_paper", "plastic", "metal", "glass", "trash"]
@@ -178,12 +173,12 @@ class DetectionSystem:
         """Créer la fenêtre de la caméra"""
         try:
             self.camera_window = tk.Toplevel(root)
-            self.camera_window.title("🎥 Vue Caméra - BinGo")
+            self.camera_window.title("🎥 Caméra")
             self.camera_window.geometry(f"{Config.CAMERA_WIDTH + 20}x{Config.CAMERA_HEIGHT + 60}")
             self.camera_window.configure(bg=Config.COLORS["surface"])
             self.camera_label = tk.Label(self.camera_window, bg=Config.COLORS["surface"])
             self.camera_label.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-            print("✅ Fenêtre caméra créée")
+            print("Fenêtre caméra créée")
         except Exception as e:
             print(f"Erreur création fenêtre caméra: {e}")
 
@@ -194,7 +189,7 @@ class DetectionSystem:
                 self.camera_window.destroy()
                 self.camera_window = None
                 self.camera_label = None
-                print("✅ Fenêtre caméra fermée")
+                print("Fenêtre caméra fermée")
         except Exception as e:
             print(f"Erreur fermeture fenêtre caméra: {e}")
 
@@ -287,7 +282,7 @@ class DetectionSystem:
                     consecutive_errors += 1
                     print(f"⚠️ Erreur capture USB #{consecutive_errors}")
                     if consecutive_errors >= max_consecutive_errors:
-                        print("❌ Trop d'erreurs de capture USB")
+                        print("Trop d'erreurs de capture USB")
                         break
                     time.sleep(0.1)
                     continue
@@ -347,7 +342,7 @@ class AdvancedObjectDetector:
         edges = cv2.Canny(blur, 30, 100)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         valid_contours = []
         for cnt in contours:
@@ -405,17 +400,17 @@ class CommunicationSystem:
                 self.consecutive_detections += 1
                 self.detection_history.append((label, confidence, timestamp))
                 self.confidence_history.append(confidence)
-                print(f"🔄 Stabilisation en cours: {label} ({elapsed_time:.1f}s/3.0s)")
+                print(f"Stabilisation en cours: {label} ({elapsed_time:.1f}s/3.0s)")
                 if elapsed_time >= Config.STABILIZATION_TIME and not self.is_analyzing:
                     avg_confidence = sum(self.confidence_history) / len(self.confidence_history)
                     if avg_confidence >= Config.CONFIDENCE_THRESHOLD:
                         self.is_analyzing = True
-                        print(f"✅ Objet stable détecté après 3s: {label} ({avg_confidence:.1f}%)")
+                        print(f"Objet stable détecté après 3s: {label} ({avg_confidence:.1f}%)")
                         self.start_displaying_result()
                         self.detection_queue.put(("validation", label, avg_confidence, image_data))
                         self.reset_stability_tracking()
             elif (self.current_stable_label != label or self.stability_start_time is None):
-                print(f"🔍 Nouveau/Changement d'objet détecté: {label}")
+                print(f"Nouveau/Changement d'objet détecté: {label}")
                 self.start_stability_tracking(label, timestamp)
         else:
             if has_object:
@@ -424,7 +419,7 @@ class CommunicationSystem:
                 (timestamp - self.last_object_time > self.no_object_timeout)):
                 if not self.detection_queue.empty():
                     return
-                print("📭 Aucun objet stable détecté")
+                print("⚠️ Aucun objet stable détecté")
                 self.detection_queue.put(("NO_OBJECT", 0))
                 self.reset_stability_tracking()
                 self.last_object_time = None
@@ -433,13 +428,13 @@ class CommunicationSystem:
         """Démarre l'affichage bloquant du résultat"""
         self.is_displaying_result = True
         self.display_start_time = time.time()
-        print("🚫 BLOCAGE : Affichage du résultat pendant 2 secondes")
+        print("Affichage du résultat pendant 2 secondes")
 
     def stop_displaying_result(self):
         """Arrête l'affichage bloquant"""
         self.is_displaying_result = False
         self.display_start_time = None
-        print("✅ DÉBLOCAGE : Prêt pour nouvelle détection")
+        print("Prêt pour nouvelle détection")
 
     def is_blocked_for_display(self):
         """Vérifie si le système est bloqué pour affichage"""
@@ -459,7 +454,7 @@ class CommunicationSystem:
         self.is_analyzing = False
         self.detection_history.clear()
         self.confidence_history.clear()
-        print(f"🎯 Début de stabilisation pour: {label}")
+        print(f"Début de stabilisation pour: {label}")
 
     def reset_stability_tracking(self):
         """Reset tous les paramètres de stabilité"""
@@ -520,7 +515,7 @@ class MainApplication(tk.Tk):
         super().__init__()
         self.comm = comm_system
         self.detection = detection_system
-        self.title("🗂️ BinGo - Poubelle Intelligente")
+        self.title("BinGo - Poubelle Intelligente")
         self.geometry(f"{Config.WINDOW_WIDTH}x{Config.WINDOW_HEIGHT}")
         self.configure(bg=Config.COLORS["background"])
         self.resizable(False, False)
@@ -551,14 +546,14 @@ class MainApplication(tk.Tk):
         forbidden_container = tk.Frame(parent, bg=Config.COLORS["background"])
         forbidden_container.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         
-        # CRÉER LA CARTE AVEC TITRE PERSONNALISÉ
+        # CRÉER LA CARTE AVEC TITRE
         shadow_frame = tk.Frame(forbidden_container, bg=Config.COLORS["shadow"], padx=1, pady=1)
         shadow_frame.pack(fill="x")
         
         card_frame = tk.Frame(shadow_frame, bg=Config.COLORS["card"], padx=10, pady=8, relief="flat")
         card_frame.pack(fill="both", expand=True)
         
-        # TITRE AVEC ICÔNE PERSONNALISÉE
+        # TITRE AVEC ICÔNE
         title_frame = tk.Frame(card_frame, bg=Config.COLORS["card"])
         title_frame.pack(anchor="w", pady=(0, 5))
         
@@ -568,7 +563,7 @@ class MainApplication(tk.Tk):
             interdit_image = Image.open(interdit_icon_path).resize((18, 18), Image.Resampling.LANCZOS)
             interdit_tk = ImageTk.PhotoImage(interdit_image)
             
-            # Stocker la référence pour éviter le garbage collection
+            # Stocker la référence
             if not hasattr(self, 'interdit_icon_ref'):
                 self.interdit_icon_ref = interdit_tk
             
@@ -590,7 +585,7 @@ class MainApplication(tk.Tk):
         content_frame = tk.Frame(forbidden_content, bg=Config.COLORS["card"])
         content_frame.pack(fill="x", padx=5, pady=5)
         
-        # OBJETS INTERDITS AVEC IMAGES PERSONNALISÉES
+        # OBJETS INTERDITS
         forbidden_items = [
             ("/home/bingo/Desktop/poubelle/icons/medoc.jpg", "Médicaments"),
             ("/home/bingo/Desktop/poubelle/icons/pile.png", "Piles"),
@@ -631,7 +626,6 @@ class MainApplication(tk.Tk):
                     "Ampoules": "💡", 
                     "Produits chimiques": "⚗️"
                 }
-                fallback_emoji = fallback_emojis.get(item_name, "❓")
                 tk.Label(item_frame, text=fallback_emoji, 
                         font=("Segoe UI Emoji", 24), 
                         bg=Config.COLORS["card"]).pack(pady=(0, 5))
@@ -705,7 +699,7 @@ class MainApplication(tk.Tk):
         waiting_container = tk.Frame(self.result_frame, bg=Config.COLORS["card"])
         waiting_container.place(relx=0.5, rely=0.5, anchor="center")
     
-        # ICÔNE LOUPE AVEC IMAGE
+        # ICÔNE LOUPE
         try:
             search_icon_path = "/home/bingo/Desktop/poubelle/icons/loupe.jpg"  # ou search.png
             search_image = Image.open(search_icon_path).resize((48, 48), Image.Resampling.LANCZOS)
@@ -732,19 +726,6 @@ class MainApplication(tk.Tk):
         tk.Label(waiting_container, text="Placez un déchet devant la caméra", 
                  font=("Segoe UI", Config.FONT_SIZE_SMALL),
                  bg=Config.COLORS["card"], fg=Config.COLORS["text_muted"]).pack(pady=(5, 0))
-    
-        self.animate_search_icon()
-    
-    def animate_search_icon(self):
-        if hasattr(self, 'search_icon') and self.search_icon.winfo_exists():
-            current = self.search_icon.cget("text")
-            icons = ["🔍", "🔎", "🔍", "⌚"]
-            try:
-                next_index = (icons.index(current) + 1) % len(icons)
-                self.search_icon.config(text=icons[next_index])
-            except ValueError:
-                self.search_icon.config(text="🔍")
-            self.after(800, self.animate_search_icon)
 
     def create_stabilization_display(self, label, progress):
         for widget in self.result_frame.winfo_children():
@@ -879,7 +860,7 @@ class MainApplication(tk.Tk):
     def start_countdown_status(self, label):
         def countdown(seconds_left):
             if seconds_left > 0:
-                self.update_status(f"✅ CONFIRMÉ: {label} - Retour dans {seconds_left}s")
+                self.update_status(f"CONFIRMÉ: {label} - Retour dans {seconds_left}s")
                 self.after(1000, lambda: countdown(seconds_left - 1))
             else:
                 self.update_status("🟢 Système prêt")
@@ -913,7 +894,7 @@ class MainApplication(tk.Tk):
         for key in self.stats:
             self.stats[key] = 0
         self.update_stats_display()
-        self.update_status("📊 Statistiques remises à zéro")
+        self.update_status("Statistiques remises à zéro")
 
     def toggle_camera(self):
         if self.detection.camera_window is None:
@@ -940,17 +921,17 @@ def main():
         comm_system = CommunicationSystem()
         detection_system = DetectionSystem(comm_system)
         app = MainApplication(comm_system, detection_system)
-        print("✅ Interface utilisateur créée")
-        print("🎯 Système de détection initialisé")
+        print("Interface utilisateur créée")
+        print("Système de détection initialisé")
         print("=" * 50)
         print("BinGo est prêt à fonctionner!")
         app.mainloop()
     except KeyboardInterrupt:
-        print("\n🛑 Arrêt demandé par l'utilisateur")
+        print("\nArrêt demandé par l'utilisateur")
     except Exception as e:
-        print(f"❌ Erreur critique: {str(e)}")
+        print(f"Erreur : {str(e)}")
     finally:
-        print("🔚 Arrêt de BinGo")
+        print("Arrêt")
 
 if __name__ == "__main__":
     main()
